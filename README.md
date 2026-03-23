@@ -37,6 +37,20 @@ git commit <commit message>
 git push -u origin <branch> 
 ```
 
+## Hosting the website
+
+To host the website, open Terminal and:
+
+``` bash
+python -m http.server 8000
+```
+
+Then in your Browser:
+
+```bash
+http://localhost:8000/docs/index.html
+```
+
 ## Data Links
 
 https://www.gdeltproject.org/
