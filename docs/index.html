@@ -170,9 +170,9 @@
 
     async function loadDaily(dayKey) {
       if (!dailyCache[dayKey]) {
-        const response = await fetch(`./data/${dayKey}.json`);
+        const response = await fetch(`./mb_data/${dayKey}.json`);
         if (!response.ok) {
-          throw new Error(`Could not load ../data/${dayKey}.json`);
+          throw new Error(`Could not load ../mb_data/${dayKey}.json`);
         }
         dailyCache[dayKey] = await response.json();
       }
@@ -272,9 +272,9 @@
     }
 
     map.on("load", async () => {
-      const datesResponse = await fetch("./data/dates.json");
+      const datesResponse = await fetch("./mb_data/dates.json");
       if (!datesResponse.ok) {
-        throw new Error("Could not load ../data/dates.json");
+        throw new Error("Could not load ../mb_data/dates.json");
       }
 
       availableDays = await datesResponse.json();
