@@ -5,6 +5,7 @@
   <title>News counts map</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link href="https://api.mapbox.com/mapbox-gl-js/v3.20.0/mapbox-gl.css" rel="stylesheet">
+  <script src="config.js"></script>
   <script src="https://api.mapbox.com/mapbox-gl-js/v3.20.0/mapbox-gl.js"></script>
   <style>
     html, body {
@@ -76,7 +77,7 @@
   <div id="map"></div>
 
   <script>
-    mapboxgl.accessToken = "pk.eyJ1Ijoib3NjaXBhbCIsImEiOiJjbW4xdmI3cDYwbXJwMnBzanJnNTZnOTdxIn0.IxA_Dyvye-NdluFbr_9eEw";
+    mapboxgl.accessToken = MAPBOX_TOKEN;
 
     const map = new mapboxgl.Map({
       container: "map",
@@ -171,7 +172,7 @@
       if (!dailyCache[dayKey]) {
         const response = await fetch(`./data/${dayKey}.json`);
         if (!response.ok) {
-          throw new Error(`Could not load ./data/${dayKey}.json`);
+          throw new Error(`Could not load ../data/${dayKey}.json`);
         }
         dailyCache[dayKey] = await response.json();
       }
@@ -273,7 +274,7 @@
     map.on("load", async () => {
       const datesResponse = await fetch("./data/dates.json");
       if (!datesResponse.ok) {
-        throw new Error("Could not load ./data/dates.json");
+        throw new Error("Could not load ../data/dates.json");
       }
 
       availableDays = await datesResponse.json();
