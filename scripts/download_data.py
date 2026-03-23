@@ -12,4 +12,4 @@ for i in range(1,22):
     response.raise_for_status()
 
     with zipfile.ZipFile(io.BytesIO(response.content)) as z:
-        z.extractall("C:/Users/ottos/Documents/Geomatik/2. Sem/AICoding/data/gkgcounts")
+        z.extractall("../data/gkgcounts")
