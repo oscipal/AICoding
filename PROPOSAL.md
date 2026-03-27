@@ -2,7 +2,7 @@
 
 ## 1. Mission
 
-We propose building a web application that ingests global event from the GDELT Project, applies intelligent filtering and spatial aggregation, and displays the events on an interactive map in (near) real-time. Taking inspiration from existing projects such as [worldmonitor](https://github.com/koala73/worldmonitor), [Live UA Map](https://liveuamap.com), [Monitor the Situation](https://monitor-the-situation.com), [Situation Monitor](https://hipcityreg-situation-monitor.vercel.app), [GLOBENEWS](https://globenews.fr), , the goal is to complement news articles from various sources with a spatial dimension and make global news more accessible to a wide audience, ranging from educational purposes to intelligence operations. The application should allow users to filter global events by location, date, topics, source, etc., and gain spatial and temporal insight into global events. 
+We propose building a web application that ingests global event from the GDELT Project, applies intelligent filtering and spatial aggregation, and displays the events on an interactive map in (near) real-time. Taking inspiration from existing projects (e.g., [worldmonitor](https://github.com/koala73/worldmonitor), [Live UA Map](https://liveuamap.com), [Monitor the Situation](https://monitor-the-situation.com), [Situation Monitor](https://hipcityreg-situation-monitor.vercel.app), [GLOBENEWS](https://globenews.fr)), the goal is to complement news articles from various sources with a spatial dimension and make global news more accessible to a wide audience, ranging from educational purposes to intelligence operations. The application should allow users to filter global events by location, date, topics, source, etc., and gain spatial and temporal insight into global events. 
 
 ## 2. Scope
 
@@ -28,14 +28,14 @@ We propose building a web application that ingests global event from the GDELT P
 
 - Correct retrieval and parsing of GDELT event records with accurate geolocation, timestamps, and topic classifications
 - Proper handling of known data quality issues such as low-precision geocoding (country-centroid coordinates) and duplicate events
-- Faithful representation of the underlying data — filters and aggregations should not distort or misrepresent event distributions
+- Faithful representation of the underlying data - filters and aggregations should not distort or misrepresent event distributions
 - Verification against manual spot-checks (e.g. selecting a known major event and confirming it appears correctly on the map)
 
 ### Operational Performance Objectives
 
 - Backend query and aggregation in (near) real-time
 - Smooth, responsive UI where filter changes, timeslider adjustments, and map navigation update the visualization immediately
-- Readable map at varying zoom levels — from global heatmap overview down to individual event clusters
+- Readable map at varying zoom levels - from global heatmap overview down to individual event clusters
 - Intuitive interface usable by non-technical users without instruction
 
 ## 4. Inputs / Outputs
