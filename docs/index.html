@@ -2,83 +2,415 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>News counts map</title>
+  <title>World News Map</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link href="https://api.mapbox.com/mapbox-gl-js/v3.20.0/mapbox-gl.css" rel="stylesheet">
   <script src="config.js"></script>
   <script src="https://api.mapbox.com/mapbox-gl-js/v3.20.0/mapbox-gl.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
   <style>
     html, body {
-      margin: 0;
-      padding: 0;
-      height: 100%;
-      font-family: sans-serif;
+      margin: 0; padding: 0; height: 100%;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 13px;
     }
+    #map { width: 100%; height: 100vh; }
 
-    #map {
-      width: 100%;
-      height: 100vh;
-    }
-
+    /* ── Controls panel ───────────────────────────────────── */
     #controls {
       position: absolute;
-      top: 12px;
-      left: 12px;
+      top: 12px; left: 12px;
       z-index: 10;
-      background: rgba(255, 255, 255, 0.95);
+      background: rgba(255,255,255,0.97);
       padding: 12px;
       border-radius: 8px;
-      min-width: 320px;
-      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
+      width: 280px;
+      max-height: calc(100vh - 24px);
+      overflow-y: auto;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.18);
     }
 
-    #modeButtons {
-      display: flex;
-      gap: 8px;
-      margin-bottom: 10px;
+    .section-title {
+      font-weight: 700;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #666;
+      margin: 10px 0 6px;
+    }
+    .section-title:first-child { margin-top: 0; }
+
+    hr.divider {
+      border: none;
+      border-top: 1px solid #e5e5e5;
+      margin: 10px 0;
     }
 
-    #modeButtons button {
+    /* mode + utility buttons */
+    #modeButtons { display: flex; gap: 6px; margin-bottom: 8px; }
+    #modeButtons button, .util-btn {
+      flex: 1;
       border: 1px solid #ccc;
       background: white;
-      padding: 6px 10px;
+      padding: 5px 8px;
       border-radius: 6px;
       cursor: pointer;
+      font-size: 12px;
     }
-
     #modeButtons button.active {
-      background: #1f6feb;
-      color: white;
-      border-color: #1f6feb;
+      background: #1f6feb; color: white; border-color: #1f6feb;
     }
+    .util-btn { width: 100%; margin-bottom: 6px; font-size: 12px; }
+    .util-btn:last-of-type { margin-bottom: 0; }
 
+    /* date slider */
     #dateLabel {
       display: block;
-      margin-bottom: 8px;
+      margin: 6px 0 4px;
       font-weight: 600;
+      font-size: 13px;
+    }
+    #locationStatus {
+      display: block; margin-bottom: 6px;
+      color: #555; font-size: 11px; min-height: 14px;
+    }
+    #daySlider { width: 100%; margin-bottom: 4px; }
+
+    /* events toggle */
+    .toggle-row {
+      display: flex; align-items: center; gap: 8px;
+      margin-bottom: 8px;
+    }
+    .toggle-row label { font-weight: 600; cursor: pointer; }
+    #eventsCount {
+      font-size: 11px; color: #555;
+      margin-bottom: 8px;
     }
 
-    #daySlider {
-      width: 100%;
+    /* category filter pills */
+    #categoryFilters {
+      display: flex; flex-wrap: wrap; gap: 5px;
+    }
+    .cat-btn {
+      padding: 3px 8px;
+      border-radius: 12px;
+      border: 1px solid #ccc;
+      background: white;
+      cursor: pointer;
+      font-size: 11px;
+      transition: background 0.15s, color 0.15s;
+    }
+    .cat-btn.active { color: white; border-color: transparent; }
+    .cat-btn[data-cat="conflict"].active     { background: #e74c3c; }
+    .cat-btn[data-cat="protest"].active     { background: #e67e22; }
+    .cat-btn[data-cat="pressure"].active    { background: #9b59b6; }
+    .cat-btn[data-cat="disagreement"].active{ background: #f39c12; }
+    .cat-btn[data-cat="diplomacy"].active   { background: #27ae60; }
+
+    /* view mode toggle */
+    #viewButtons { display: flex; gap: 6px; margin-bottom: 8px; }
+    #viewButtons button {
+      flex: 1; border: 1px solid #ccc; background: white;
+      padding: 5px 8px; border-radius: 6px; cursor: pointer; font-size: 12px;
+    }
+    #viewButtons button.active { background: #1f6feb; color: white; border-color: #1f6feb; }
+
+    /* article panel */
+    #articlePanel {
+      position: absolute; top: 12px; right: 12px;
+      width: 300px; max-height: calc(100vh - 24px);
+      background: rgba(255,255,255,0.97);
+      border-radius: 8px; overflow: hidden;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.18);
+      display: none; flex-direction: column; z-index: 10;
+    }
+    #articlePanel.visible { display: flex; }
+    #articlePanelHeader {
+      padding: 10px 12px 8px; border-bottom: 1px solid #e5e5e5;
+      display: flex; justify-content: space-between; align-items: center;
+      flex-shrink: 0;
+    }
+    #articlePanelTitle { font-weight: 700; font-size: 13px; }
+    #articlePanelClose {
+      border: none; background: none; cursor: pointer;
+      font-size: 20px; color: #666; line-height: 1; padding: 0;
+    }
+    #articleList { overflow-y: auto; flex: 1; }
+    .article-item {
+      padding: 8px 12px; border-bottom: 1px solid #f0f0f0;
+    }
+    .article-item:last-child { border-bottom: none; }
+    .article-cat { font-weight: 700; font-size: 11px; margin-bottom: 2px; }
+    .article-event { font-size: 12px; font-weight: 600; margin-bottom: 2px; }
+    .article-loc { font-size: 11px; color: #555; margin-bottom: 3px; }
+    .article-meta { font-size: 11px; color: #777; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .article-link { color: #1f6feb; text-decoration: none; font-size: 11px; }
+    .article-link:hover { text-decoration: underline; }
+
+    /* info button */
+    #infoBtn {
+      position: absolute; top: 12px; right: 12px;
+      width: 32px; height: 32px; border-radius: 50%;
+      background: rgba(255,255,255,0.97);
+      border: 1px solid #ccc;
+      font-size: 16px; font-weight: 700; color: #444;
+      cursor: pointer; z-index: 11;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+      display: flex; align-items: center; justify-content: center;
+    }
+    #infoBtn:hover { background: #f0f0f0; }
+
+    /* info modal */
+    #infoOverlay {
+      position: absolute; inset: 0;
+      background: rgba(0,0,0,0.4);
+      z-index: 20; display: none; align-items: center; justify-content: center;
+    }
+    #infoOverlay.visible { display: flex; }
+    #infoModal {
+      background: white; border-radius: 10px;
+      width: 480px; max-width: calc(100vw - 32px);
+      max-height: calc(100vh - 48px);
+      overflow-y: auto;
+      padding: 24px 28px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+      position: relative;
+    }
+    #infoModal h2 { font-size: 16px; margin: 0 0 4px; }
+    #infoModal h3 { font-size: 13px; margin: 18px 0 6px; color: #333; }
+    #infoModal p, #infoModal li { font-size: 12px; color: #444; line-height: 1.6; margin: 0 0 6px; }
+    #infoModal ul { padding-left: 18px; margin: 0 0 6px; }
+    #infoModal .cat-dot {
+      display: inline-block; width: 9px; height: 9px;
+      border-radius: 50%; margin-right: 5px; vertical-align: middle;
+    }
+    #infoModalClose {
+      position: absolute; top: 14px; right: 16px;
+      border: none; background: none; cursor: pointer;
+      font-size: 22px; color: #888; line-height: 1;
+    }
+    #infoModalClose:hover { color: #333; }
+    .info-divider { border: none; border-top: 1px solid #eee; margin: 16px 0 0; }
+
+    /* time series panel */
+    #tsPanel {
+      position: absolute; bottom: 0; left: 0; right: 0;
+      height: 230px;
+      background: rgba(255,255,255,0.97);
+      border-top: 1px solid #ddd;
+      display: none; flex-direction: column;
+      z-index: 10; padding: 10px 16px 8px;
+      box-shadow: 0 -2px 12px rgba(0,0,0,0.15);
+    }
+    #tsPanel.visible { display: flex; }
+    #tsPanelHeader {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 6px;
+    }
+    #tsCountryName { font-weight: 700; font-size: 14px; }
+    #tsSubtitle { font-size: 11px; color: #666; margin-left: 8px; }
+    #tsClose {
+      border: none; background: none; cursor: pointer;
+      font-size: 20px; color: #666; line-height: 1; padding: 0;
+    }
+    #tsChartWrap { flex: 1; position: relative; min-height: 0; }
+
+    /* popup */
+    .mapboxgl-popup-content { padding: 0; border-radius: 8px; overflow: hidden; }
+    .event-popup { padding: 10px 12px; max-width: 260px; font-size: 12px; }
+    .event-popup .popup-type {
+      font-weight: 700; font-size: 13px;
+      margin-bottom: 4px;
+    }
+    .event-popup .popup-row { margin: 2px 0; color: #333; }
+    .event-popup a { color: #1f6feb; text-decoration: none; }
+    .event-popup a:hover { text-decoration: underline; }
+    .popup-themes { margin: 4px 0; display: flex; flex-wrap: wrap; gap: 3px; }
+    .theme-chip {
+      background: #f0f0f0; border-radius: 10px;
+      padding: 1px 6px; font-size: 10px; color: #444;
     }
   </style>
 </head>
 <body>
   <div id="controls">
+
+    <!-- View mode -->
+    <div class="section-title">View</div>
+    <div id="viewButtons">
+      <button id="btnActivity" class="active">News Activity</button>
+      <button id="btnPolitical">Political Landscape</button>
+    </div>
+
+    <hr class="divider">
+
+    <!-- Choropleth mode -->
+    <div class="section-title">Choropleth view</div>
     <div id="modeButtons">
       <button id="btnDaily" class="active">Daily</button>
       <button id="btnWeekly">Weekly</button>
       <button id="btnMonthly">Monthly</button>
     </div>
-    <span id="dateLabel">Loading...</span>
+
+    <button class="util-btn" id="locateBtn" type="button">Use my location</button>
+    <button class="util-btn" id="zoomOutBtn" type="button">Zoom out</button>
+    <span id="locationStatus"></span>
+
+    <span id="dateLabel">Loading…</span>
     <input id="daySlider" type="range" min="0" max="0" value="0" step="1" />
+
+    <hr class="divider">
+
+    <!-- Event points -->
+    <div class="section-title">Event points</div>
+    <div class="toggle-row">
+      <input type="checkbox" id="showEvents" checked>
+      <label for="showEvents">Show clustered events</label>
+    </div>
+    <div id="eventsCount">Loading…</div>
+
+    <div class="section-title">Filter by category</div>
+    <div id="categoryFilters">
+      <button class="cat-btn active" data-cat="conflict">Violence &amp; Conflict</button>
+      <button class="cat-btn active" data-cat="protest">Protest</button>
+      <button class="cat-btn active" data-cat="pressure">Threats &amp; Coercion</button>
+      <button class="cat-btn active" data-cat="disagreement">Demands &amp; Rejection</button>
+      <button class="cat-btn active" data-cat="diplomacy">Diplomacy &amp; Cooperation</button>
+    </div>
   </div>
 
   <div id="map"></div>
 
+  <!-- Info button -->
+  <button id="infoBtn" title="About this map">?</button>
+
+  <!-- Info modal -->
+  <div id="infoOverlay">
+    <div id="infoModal">
+      <button id="infoModalClose">×</button>
+      <h2>World News Map</h2>
+      <p style="color:#777;font-size:11px">Powered by the GDELT Project</p>
+
+      <hr class="info-divider">
+
+      <h3>Data source</h3>
+      <p>This map uses the <strong>GDELT Events 2.0</strong> dataset, which automatically scans
+      news articles from around the world every 15 minutes and extracts political events — who
+      did what to whom, and where. Each dot on the map represents one news article in which
+      a political event was identified.</p>
+
+      <h3>News coverage bias</h3>
+      <p>GDELT's coverage is <strong>not geographically neutral</strong>. The dataset is
+      dominated by <strong>English-language and Western media</strong> — primarily outlets from
+      North America, the UK, and Australia. Regions with less English-language media presence
+      (Central Africa, Central Asia, parts of Latin America) are significantly
+      underrepresented. High event counts for a country may reflect media attention as much as
+      actual activity.</p>
+
+      <h3>Event categories</h3>
+      <p>Events are classified using the <strong>CAMEO coding scheme</strong>, a political
+      science framework that only captures <em>actor-to-actor political interactions</em>.
+      Non-political topics (natural disasters, economics, culture) are not covered.</p>
+      <ul>
+        <li><span class="cat-dot" style="background:#e74c3c"></span><strong>Violence &amp; Conflict</strong> — armed fighting, assault, mass violence</li>
+        <li><span class="cat-dot" style="background:#e67e22"></span><strong>Protest</strong> — demonstrations, strikes, civil unrest</li>
+        <li><span class="cat-dot" style="background:#9b59b6"></span><strong>Threats &amp; Coercion</strong> — threats, shows of force, sanctions, coercion</li>
+        <li><span class="cat-dot" style="background:#f39c12"></span><strong>Demands &amp; Rejection</strong> — demands, disapproval, rejection, investigations</li>
+        <li><span class="cat-dot" style="background:#27ae60"></span><strong>Diplomacy &amp; Cooperation</strong> — statements, consultations, aid, agreements</li>
+      </ul>
+
+      <h3>Goldstein scale</h3>
+      <p>The <strong>Political Landscape</strong> view colors countries by their
+      <strong>Goldstein score</strong> — a fixed value assigned to each event type ranging
+      from <strong>−10</strong> (most destabilizing) to <strong>+10</strong> (most
+      cooperative). The map shows each country's <em>weighted average Goldstein score as
+      an initiating actor</em> (Actor 1), reflecting how aggressively or cooperatively
+      that country behaves in its outgoing interactions.</p>
+      <ul>
+        <li><span class="cat-dot" style="background:#1a9641"></span> &gt; +4 — strongly cooperative</li>
+        <li><span class="cat-dot" style="background:#a6d96a"></span> +2 to +4 — cooperative</li>
+        <li><span class="cat-dot" style="background:#d9ef8b"></span> 0 to +2 — slightly cooperative</li>
+        <li><span class="cat-dot" style="background:#fee08b"></span> −1 to 0 — neutral</li>
+        <li><span class="cat-dot" style="background:#fc8d59"></span> −3 to −1 — conflictual</li>
+        <li><span class="cat-dot" style="background:#d73027"></span> −6 to −3 — very conflictual</li>
+        <li><span class="cat-dot" style="background:#a50026"></span> &lt; −6 — highly destabilizing</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Article panel (news activity mode) -->
+  <div id="articlePanel">
+    <div id="articlePanelHeader">
+      <span id="articlePanelTitle">Articles</span>
+      <button id="articlePanelClose">×</button>
+    </div>
+    <div id="articleList"></div>
+  </div>
+
+  <!-- Time series panel (political landscape mode) -->
+  <div id="tsPanel">
+    <div id="tsPanelHeader">
+      <div>
+        <span id="tsCountryName">—</span>
+        <span id="tsSubtitle">Weighted avg. Goldstein score (outgoing events)</span>
+      </div>
+      <button id="tsClose">×</button>
+    </div>
+    <div id="tsChartWrap">
+      <canvas id="tsChart"></canvas>
+    </div>
+  </div>
+
   <script>
     mapboxgl.accessToken = MAPBOX_TOKEN;
 
+    // ── Categories (CAMEO-based) ─────────────────────────────
+    const CATEGORIES = [
+      { id: "conflict",     label: "Violence & Conflict",    color: "#e74c3c" },
+      { id: "protest",      label: "Protest",                color: "#e67e22" },
+      { id: "pressure",     label: "Threats & Coercion",     color: "#9b59b6" },
+      { id: "disagreement", label: "Demands & Rejection",    color: "#f39c12" },
+      { id: "diplomacy",    label: "Diplomacy & Cooperation",color: "#27ae60" },
+    ];
+
+    const CAT_BY_ID  = Object.fromEntries(CATEGORIES.map(c => [c.id, c]));
+    const CAT_COLORS = Object.fromEntries(CATEGORIES.map(c => [c.id, c.color]));
+
+    function featureCategory(props) {
+      return props.category || "diplomacy";
+    }
+
+    // ── Goldstein color scale (diverging red–white–green) ────
+    // Most countries score between -1 and +4 (GDELT is dominated by verbal/diplomatic
+    // events which are positive), so the scale is stretched accordingly.
+    function colorForGoldstein(score) {
+      if (score === null || score === undefined) return "rgba(0,0,0,0)";
+      if (score >  4) return "#1a9641";
+      if (score >  2) return "#a6d96a";
+      if (score >  0) return "#d9ef8b";
+      if (score > -1) return "#fee08b";
+      if (score > -3) return "#fc8d59";
+      if (score > -6) return "#d73027";
+      return "#a50026";
+    }
+
+    function buildGoldsteinExpression(rows) {
+      const expr = ["match", ["get", "iso_3166_1_alpha_3"]];
+      for (const r of rows) {
+        if (!r.iso3) continue;
+        expr.push(r.iso3, colorForGoldstein(r.goldstein));
+      }
+      expr.push("rgba(0,0,0,0)");
+      return expr;
+    }
+
+    function makeGoldsteinLookup(rows) {
+      const lookup = {};
+      for (const r of rows) lookup[r.iso3] = r;
+      return lookup;
+    }
+
+    // ── State ────────────────────────────────────────────────
     const map = new mapboxgl.Map({
       container: "map",
       style: "mapbox://styles/mapbox/standard",
@@ -86,22 +418,34 @@
       zoom: 1.2
     });
 
-    let currentMode = "daily";
+    let viewMode      = "activity";  // "activity" | "political"
+    let currentMode   = "daily";
+    let currentDayKey = "";
     let availableDays = [];
     let availablePeriods = [];
-    let countByIso = {};
+    let countByIso    = {};
+    let goldsteinByIso = {};
+    let hoveredCountryId = null;
+    let userLocationMarker = null;
 
-    const dailyCache = {};
-    const aggregateCache = {
-      weekly: {},
-      monthly: {}
-    };
+    // points state
+    let allPointsForDay = [];
+    let activeCats = new Set(CATEGORIES.map(c => c.id));
+    let eventsVisible = true;
 
-    const popup = new mapboxgl.Popup({
-      closeButton: false,
-      closeOnClick: false
-    });
+    const dailyCache          = {};
+    const aggregateCache      = { weekly: {}, monthly: {} };
+    const goldsteinAggCache   = { weekly: {}, monthly: {} };
+    const pointsCache         = {};
+    const goldsteinCache      = {};
 
+    // time series
+    let tsChart        = null;
+    let tsCountryBounds = null;
+
+    const popup = new mapboxgl.Popup({ closeButton: true, closeOnClick: false, maxWidth: "280px" });
+
+    // ── Helpers ──────────────────────────────────────────────
     function setActiveButton(mode) {
       document.getElementById("btnDaily").classList.toggle("active", mode === "daily");
       document.getElementById("btnWeekly").classList.toggle("active", mode === "weekly");
@@ -109,25 +453,23 @@
     }
 
     function colorForCount(count) {
-      count = Number(count) || 0;
-      if (count > 1000) return "#7f0000";
-      if (count > 300) return "#b30000";
-      if (count > 100) return "#e34a33";
-      if (count > 30) return "#fc8d59";
-      if (count > 0) return "#fdd49e";
+      // Logarithmic scale so daily and aggregated views use the same palette.
+      // log10(1)=0, log10(30)≈1.5, log10(300)≈2.5, log10(3000)≈3.5, log10(30000)≈4.5
+      const log = Math.log10(Math.max(Number(count) || 0, 1));
+      if (log > 4)              return "#084594";
+      if (log > 3)              return "#2171b5";
+      if (log > 2)              return "#4292c6";
+      if (log > 1)              return "#9ecae1";
+      if ((Number(count)||0)>0) return "#6baed6";
       return "rgba(0,0,0,0)";
     }
 
     function buildFillExpression(rows) {
       const expr = ["match", ["get", "iso_3166_1_alpha_3"]];
-
       for (const row of rows) {
-        const iso3 = row.iso3
-        const count = Number(row.count) || 0;
-        if (!iso3) continue;
-        expr.push(iso3, colorForCount(count));
+        if (!row.iso3) continue;
+        expr.push(row.iso3, colorForCount(row.count));
       }
-
       expr.push("rgba(0,0,0,0)");
       return expr;
     }
@@ -135,171 +477,442 @@
     function makeCountLookup(rows) {
       const lookup = {};
       for (const row of rows) {
-        const iso3 = row.iso3 || row.iso3;
-        if (!iso3) continue;
-        lookup[iso3] = Number(row.count) || 0;
+        if (!row.iso3) continue;
+        lookup[row.iso3] = Number(row.count) || 0;
       }
       return lookup;
     }
 
     function formatDayLabel(dayKey) {
-      return `${dayKey.slice(0, 4)}-${dayKey.slice(4, 6)}-${dayKey.slice(6, 8)}`;
+      return `${dayKey.slice(0,4)}-${dayKey.slice(4,6)}-${dayKey.slice(6,8)}`;
+    }
+    function getMonthKey(d) { return `${d.slice(0,4)}-${d.slice(4,6)}`; }
+    function getWeekKey(d) {
+      const date = new Date(Date.UTC(+d.slice(0,4), +d.slice(4,6)-1, +d.slice(6,8)));
+      const tmp = new Date(date);
+      const day = tmp.getUTCDay() || 7;
+      tmp.setUTCDate(tmp.getUTCDate() + 4 - day);
+      const yr = tmp.getUTCFullYear();
+      const wk = Math.ceil(((tmp - new Date(Date.UTC(yr,0,1))) / 86400000 + 1) / 7);
+      return `${yr}-W${String(wk).padStart(2,"0")}`;
     }
 
-    function getMonthKey(dayKey) {
-      return `${dayKey.slice(0, 4)}-${dayKey.slice(4, 6)}`;
+    // ── Article panel ────────────────────────────────────────
+    function renderArticleItem(props) {
+      const cat      = CAT_BY_ID[featureCategory(props)] || CAT_BY_ID["diplomacy"];
+      const toneNum  = parseFloat(props.tone);
+      const toneStr  = isNaN(toneNum) ? "" :
+        `<span style="color:${toneNum < -2 ? "#e74c3c" : toneNum > 2 ? "#27ae60" : "#888"}">
+          ${toneNum > 0 ? "+" : ""}${toneNum.toFixed(1)} tone</span>`;
+      const link = props.url
+        ? `<a class="article-link" href="${props.url}" target="_blank" rel="noopener">${props.source || "source"}</a>`
+        : (props.source || "—");
+      return `
+        <div class="article-item">
+          <div class="article-cat" style="color:${cat.color}">${cat.label}</div>
+          <div class="article-event">${props.event_type || ""}</div>
+          <div class="article-loc">📍 ${props.location || "Unknown"}</div>
+          <div class="article-meta">${toneStr}${link}</div>
+        </div>`;
     }
 
-    function getWeekKey(dayKey) {
-      const year = Number(dayKey.slice(0, 4));
-      const month = Number(dayKey.slice(4, 6)) - 1;
-      const day = Number(dayKey.slice(6, 8));
+    function showArticlePanel(features) {
+      const n = features.length;
+      document.getElementById("articlePanelTitle").textContent =
+        `${n} article${n !== 1 ? "s" : ""}`;
+      document.getElementById("articleList").innerHTML =
+        features.map(f => renderArticleItem(f.properties)).join("");
+      document.getElementById("articlePanel").classList.add("visible");
+      popup.remove();
+    }
 
-      const date = new Date(Date.UTC(year, month, day));
-      const target = new Date(date);
+    function closeArticlePanel() {
+      document.getElementById("articlePanel").classList.remove("visible");
+    }
 
-      const dayNum = target.getUTCDay() || 7;
-      target.setUTCDate(target.getUTCDate() + 4 - dayNum);
+    function clusterLeaves(source, clusterId, limit) {
+      return new Promise((resolve, reject) =>
+        source.getClusterLeaves(clusterId, limit, 0,
+          (err, feats) => err ? reject(err) : resolve(feats))
+      );
+    }
 
-      const isoYear = target.getUTCFullYear();
-      const yearStart = new Date(Date.UTC(isoYear, 0, 1));
-      const weekNo = Math.ceil((((target - yearStart) / 86400000) + 1) / 7);
+    async function loadGoldstein(dayKey) {
+      if (!goldsteinCache[dayKey]) {
+        const r = await fetch(`./goldstein_data/${dayKey}.json`);
+        goldsteinCache[dayKey] = r.ok ? await r.json() : [];
+      }
+      return goldsteinCache[dayKey];
+    }
 
-      return `${isoYear}-W${String(weekNo).padStart(2, "0")}`;
+    async function showTimeSeries(iso3, countryName) {
+      document.getElementById("tsCountryName").textContent = countryName;
+      document.getElementById("tsPanel").classList.add("visible");
+
+      const labels    = [];
+      const scores    = [];
+      const counts    = [];
+      const periodKeys = [];   // used by onClick to navigate
+
+      if (currentMode === "daily") {
+        const allData = await Promise.all(availableDays.map(day => loadGoldstein(day)));
+        for (let i = 0; i < availableDays.length; i++) {
+          const day   = availableDays[i];
+          const entry = allData[i].find(d => d.iso3 === iso3);
+          labels.push(`${day.slice(4,6)}/${day.slice(6,8)}`);
+          scores.push(entry ? entry.goldstein : null);
+          counts.push(entry ? entry.n : 0);
+          periodKeys.push(day);
+        }
+      } else {
+        const periods = computeAvailablePeriods(currentMode);
+        const allAgg  = await Promise.all(periods.map(p => buildGoldsteinAggregate(currentMode, p)));
+        for (let i = 0; i < periods.length; i++) {
+          const entry = allAgg[i].find(d => d.iso3 === iso3);
+          labels.push(periods[i]);
+          scores.push(entry ? entry.goldstein : null);
+          counts.push(entry ? entry.n : 0);
+          periodKeys.push(periods[i]);
+        }
+      }
+
+      const ctx = document.getElementById("tsChart").getContext("2d");
+      if (tsChart) tsChart.destroy();
+      tsChart = new Chart(ctx, {
+        type: "line",
+        data: {
+          labels,
+          datasets: [
+            {
+              label: "Goldstein Score",
+              data: scores,
+              borderColor: "#1f6feb",
+              backgroundColor: "rgba(31,111,235,0.08)",
+              tension: 0.35,
+              fill: true,
+              spanGaps: true,
+              pointRadius: 0,
+              pointHoverRadius: 4,
+            },
+            {
+              label: "Event Count",
+              data: counts,
+              type: "bar",
+              backgroundColor: "rgba(150,150,150,0.25)",
+              borderColor: "rgba(150,150,150,0.5)",
+              borderWidth: 1,
+              yAxisID: "yCount",
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: "index", intersect: false },
+          onClick: async (evt, elements) => {
+            if (!elements.length) return;
+            const idx      = elements[0].index;
+            const periodKey = periodKeys[idx];
+            if (!periodKey) return;
+            closeTimeSeries();
+            viewMode = "activity";
+            document.getElementById("btnActivity").classList.add("active");
+            document.getElementById("btnPolitical").classList.remove("active");
+            await switchMode(currentMode);
+            const slider  = document.getElementById("daySlider");
+            const pIdx    = availablePeriods.indexOf(periodKey);
+            if (pIdx >= 0) {
+              slider.value = pIdx;
+              await renderSelectionByIndex(pIdx);
+            }
+            if (tsCountryBounds) {
+              map.fitBounds(tsCountryBounds, { padding: 40, maxZoom: 5, duration: 800 });
+            }
+          },
+          plugins: {
+            legend: { display: true, position: "top",
+              labels: { font: { size: 10 }, boxWidth: 12 } },
+            tooltip: { bodyFont: { size: 11 }, titleFont: { size: 11 } }
+          },
+          scales: {
+            x: { ticks: { font: { size: 10 } } },
+            y: {
+              min: -10, max: 10,
+              title: { display: true, text: "Goldstein", font: { size: 10 } },
+              ticks: { font: { size: 10 } },
+              grid: {
+                color: ctx => ctx.tick.value === 0 ? "rgba(0,0,0,0.35)" : "rgba(0,0,0,0.06)"
+              }
+            },
+            yCount: {
+              position: "right",
+              title: { display: true, text: "Events", font: { size: 10 } },
+              ticks: { font: { size: 10 } },
+              grid: { drawOnChartArea: false }
+            }
+          }
+        }
+      });
+    }
+
+    function closeTimeSeries() {
+      document.getElementById("tsPanel").classList.remove("visible");
+      if (tsChart) { tsChart.destroy(); tsChart = null; }
     }
 
     async function loadDaily(dayKey) {
       if (!dailyCache[dayKey]) {
-        const response = await fetch(`./mb_data/${dayKey}.json`);
-        if (!response.ok) {
-          throw new Error(`Could not load ../mb_data/${dayKey}.json`);
-        }
-        dailyCache[dayKey] = await response.json();
+        const r = await fetch(`./mb_data/${dayKey}.json`);
+        if (!r.ok) throw new Error(`Cannot load mb_data/${dayKey}.json`);
+        dailyCache[dayKey] = await r.json();
       }
       return dailyCache[dayKey];
     }
 
-    async function buildAggregate(mode, periodKey) {
-      if (aggregateCache[mode][periodKey]) {
-        return aggregateCache[mode][periodKey];
-      }
-
-      const matchingDays = availableDays.filter(dayKey => {
-        if (mode === "weekly") return getWeekKey(dayKey) === periodKey;
-        if (mode === "monthly") return getMonthKey(dayKey) === periodKey;
-        return false;
-      });
-
+    async function buildGoldsteinAggregate(mode, periodKey) {
+      if (goldsteinAggCache[mode][periodKey]) return goldsteinAggCache[mode][periodKey];
+      const matching = availableDays.filter(d =>
+        mode === "weekly" ? getWeekKey(d) === periodKey : getMonthKey(d) === periodKey
+      );
+      const allData = await Promise.all(matching.map(day => loadGoldstein(day)));
       const totals = {};
-
-      for (const dayKey of matchingDays) {
-        const rows = await loadDaily(dayKey);
-
-        for (const row of rows) {
-          const iso3 = row.iso3 || row.iso3;
-          const count = Number(row.count) || 0;
-          if (!iso3) continue;
-          totals[iso3] = (totals[iso3] || 0) + count;
+      for (const data of allData) {
+        for (const r of data) {
+          if (!totals[r.iso3]) totals[r.iso3] = { gs: 0, n: 0, conflict: 0 };
+          totals[r.iso3].gs       += r.goldstein * r.n;
+          totals[r.iso3].n        += r.n;
+          totals[r.iso3].conflict += r.conflict_pct * r.n;
         }
       }
+      const result = Object.entries(totals)
+        .filter(([, s]) => s.n > 0)
+        .map(([iso3, s]) => ({
+          iso3,
+          goldstein:    Math.round(s.gs / s.n * 100) / 100,
+          n:            s.n,
+          conflict_pct: Math.round(s.conflict / s.n * 10) / 10,
+        }));
+      goldsteinAggCache[mode][periodKey] = result;
+      return result;
+    }
 
-      const aggregatedRows = Object.entries(totals).map(([iso3, count]) => ({
-        iso3,
-        count
-      }));
-
-      aggregateCache[mode][periodKey] = aggregatedRows;
-      return aggregatedRows;
+    async function buildAggregate(mode, periodKey) {
+      if (aggregateCache[mode][periodKey]) return aggregateCache[mode][periodKey];
+      const matching = availableDays.filter(d =>
+        mode === "weekly" ? getWeekKey(d) === periodKey : getMonthKey(d) === periodKey
+      );
+      const totals = {};
+      for (const d of matching) {
+        const rows = await loadDaily(d);
+        for (const r of rows) {
+          if (!r.iso3) continue;
+          totals[r.iso3] = (totals[r.iso3] || 0) + (Number(r.count) || 0);
+        }
+      }
+      const agg = Object.entries(totals).map(([iso3, count]) => ({ iso3, count }));
+      aggregateCache[mode][periodKey] = agg;
+      return agg;
     }
 
     async function getRowsForSelection(mode, periodKey) {
-      if (mode === "daily") {
-        return await loadDaily(periodKey);
-      }
-      return await buildAggregate(mode, periodKey);
+      return mode === "daily" ? loadDaily(periodKey) : buildAggregate(mode, periodKey);
     }
 
     function computeAvailablePeriods(mode) {
-      if (mode === "daily") {
-        return [...availableDays];
-      }
-      if (mode === "weekly") {
-        return [...new Set(availableDays.map(getWeekKey))].sort();
-      }
-      if (mode === "monthly") {
-        return [...new Set(availableDays.map(getMonthKey))].sort();
-      }
+      if (mode === "daily")   return [...availableDays];
+      if (mode === "weekly")  return [...new Set(availableDays.map(getWeekKey))].sort();
+      if (mode === "monthly") return [...new Set(availableDays.map(getMonthKey))].sort();
       return [];
     }
 
-    function renderRows(rows, label) {
+    // ── Points helpers ───────────────────────────────────────
+    async function loadPoints(dayKey) {
+      if (!pointsCache[dayKey]) {
+        const r = await fetch(`./points_data/${dayKey}.geojson`);
+        if (!r.ok) return { type: "FeatureCollection", features: [] };
+        pointsCache[dayKey] = await r.json();
+      }
+      return pointsCache[dayKey];
+    }
+
+    function applyPointFilter() {
+      if (!map.getSource("events")) return;
+
+      const filtered = activeCats.size === CATEGORIES.length
+        ? allPointsForDay
+        : allPointsForDay.filter(f => activeCats.has(featureCategory(f.properties)));
+
+      map.getSource("events").setData({ type: "FeatureCollection", features: filtered });
+      document.getElementById("eventsCount").textContent =
+        `Showing ${filtered.length.toLocaleString()} of ${allPointsForDay.length.toLocaleString()} events`;
+
+      const visibility = eventsVisible ? "visible" : "none";
+      for (const id of ["clusters","cluster-count","unclustered-point"]) {
+        map.setLayoutProperty(id, "visibility", visibility);
+      }
+    }
+
+    // ── Render choropleth + points for a given selection ─────
+    function renderChoropleth(rows, label) {
       countByIso = makeCountLookup(rows);
       document.getElementById("dateLabel").textContent = label;
-
-      map.setPaintProperty(
-        "country-fills",
-        "fill-color",
-        buildFillExpression(rows)
-      );
+      map.setPaintProperty("country-fills", "fill-color", buildFillExpression(rows));
     }
 
     async function renderSelectionByIndex(index) {
       const periodKey = availablePeriods[index];
       if (!periodKey) return;
 
-      const rows = await getRowsForSelection(currentMode, periodKey);
+      if (viewMode === "political") {
+        let gsData;
+        if (currentMode === "daily") {
+          gsData = await loadGoldstein(periodKey);
+        } else {
+          gsData = await buildGoldsteinAggregate(currentMode, periodKey);
+        }
+        goldsteinByIso = makeGoldsteinLookup(gsData);
 
-      let label = periodKey;
-      if (currentMode === "daily") {
-        label = formatDayLabel(periodKey);
+        const label = currentMode === "daily"
+          ? `Political: ${formatDayLabel(periodKey)}`
+          : `Political ${currentMode.charAt(0).toUpperCase() + currentMode.slice(1)}: ${periodKey}`;
+        document.getElementById("dateLabel").textContent = label;
+        map.setPaintProperty("country-fills", "fill-color", buildGoldsteinExpression(gsData));
+
+        if (map.getSource("events")) {
+          map.getSource("events").setData({ type: "FeatureCollection", features: [] });
+          document.getElementById("eventsCount").textContent = "Event points not shown in Political Landscape mode";
+        }
+        currentDayKey = periodKey;
+        return;
       }
 
-      renderRows(rows, `${currentMode}: ${label}`);
+      // Activity mode
+      const rows = await getRowsForSelection(currentMode, periodKey);
+      const label = currentMode === "daily"
+        ? `Daily: ${formatDayLabel(periodKey)}`
+        : `${currentMode.charAt(0).toUpperCase()+currentMode.slice(1)}: ${periodKey}`;
+
+      renderChoropleth(rows, label);
+
+      if (map.getSource("events")) {
+        if (currentMode === "daily") {
+          currentDayKey = periodKey;
+          const geojson = await loadPoints(periodKey);
+          allPointsForDay = geojson.features;
+        } else {
+          currentDayKey = "";
+          const matchingDays = availableDays.filter(d =>
+            currentMode === "weekly" ? getWeekKey(d) === periodKey : getMonthKey(d) === periodKey
+          );
+          const combined = [];
+          for (const day of matchingDays) {
+            const geojson = await loadPoints(day);
+            combined.push(...geojson.features);
+          }
+          allPointsForDay = combined;
+        }
+        applyPointFilter();
+      }
     }
 
     async function switchMode(mode) {
       currentMode = mode;
       setActiveButton(mode);
-
       availablePeriods = computeAvailablePeriods(mode);
-
       const slider = document.getElementById("daySlider");
       slider.min = 0;
       slider.max = Math.max(availablePeriods.length - 1, 0);
-      slider.value = 0;
-
-      await renderSelectionByIndex(0);
+      slider.value = slider.max;           // start at most recent
+      await renderSelectionByIndex(Number(slider.value));
     }
 
-    map.on("load", async () => {
-      const datesResponse = await fetch("./mb_data/dates.json");
-      if (!datesResponse.ok) {
-        throw new Error("Could not load ../mb_data/dates.json");
-      }
+    function locateUser() {
+      const statusEl = document.getElementById("locationStatus");
+      if (!navigator.geolocation) { statusEl.textContent = "Geolocation not supported."; return; }
+      statusEl.textContent = "Getting your location…";
+      navigator.geolocation.getCurrentPosition(
+        pos => {
+          const { longitude: lng, latitude: lat } = pos.coords;
+          map.flyTo({ center: [lng, lat], zoom: 7, essential: true });
+          if (userLocationMarker) userLocationMarker.remove();
+          userLocationMarker = new mapboxgl.Marker()
+            .setLngLat([lng, lat])
+            .setPopup(new mapboxgl.Popup().setHTML("<strong>You are here</strong>"))
+            .addTo(map);
+          statusEl.textContent = `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+        },
+        err => {
+          const msgs = { 1:"Permission denied.", 2:"Position unavailable.", 3:"Timed out." };
+          statusEl.textContent = msgs[err.code] || "Could not get location.";
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      );
+    }
 
-      availableDays = await datesResponse.json();
+    // ── Popup builder ────────────────────────────────────────
+    function buildPopupHTML(props, dayKey) {
+      const catId    = featureCategory(props);
+      const cat      = CAT_BY_ID[catId];
+      const color    = cat ? cat.color : "#888";
+      const catLabel = cat ? cat.label : "Unknown";
+
+      const dateStr = dayKey
+        ? `${dayKey.slice(0,4)}-${dayKey.slice(4,6)}-${dayKey.slice(6,8)}`
+        : "";
+
+      const toneNum = parseFloat(props.tone);
+      const toneStr = isNaN(toneNum) ? "" :
+        `<span style="color:${toneNum < -2 ? "#e74c3c" : toneNum > 2 ? "#27ae60" : "#888"}">
+          ${toneNum > 0 ? "+" : ""}${toneNum.toFixed(1)} tone
+        </span>`;
+
+      const goldNum = parseFloat(props.goldstein);
+      const goldStr = isNaN(goldNum) ? "" :
+        `<span style="color:${goldNum < -3 ? "#e74c3c" : goldNum > 3 ? "#27ae60" : "#888"}">
+          Goldstein ${goldNum > 0 ? "+" : ""}${goldNum.toFixed(1)}
+        </span>`;
+
+      const sourceLink = props.url
+        ? `<a href="${props.url}" target="_blank" rel="noopener">${props.source || "source"}</a>`
+        : (props.source || "—");
+
+      return `
+        <div class="event-popup">
+          <div class="popup-type" style="color:${color}">${catLabel}</div>
+          <div class="popup-row" style="font-weight:600">${props.event_type || ""}</div>
+          <div class="popup-row">📍 ${props.location || "Unknown"}</div>
+          <div class="popup-row">📅 ${dateStr} &nbsp; ${toneStr} &nbsp; ${goldStr}</div>
+          <div class="popup-row">📰 ${sourceLink}</div>
+        </div>`;
+    }
+
+    // ── Map load ─────────────────────────────────────────────
+    map.on("load", async () => {
+      // --- Choropleth setup ---
+      const datesRes = await fetch("./mb_data/dates.json");
+      if (!datesRes.ok) throw new Error("Cannot load dates.json");
+      availableDays = await datesRes.json();
 
       map.addSource("countries", {
         type: "vector",
         url: "mapbox://mapbox.country-boundaries-v1"
       });
 
+      const countryFilter = [
+        "all",
+        ["==", ["get", "disputed"], "false"],
+        ["any", ["==", "all", ["get", "worldview"]], ["in", "US", ["get", "worldview"]]]
+      ];
+
       map.addLayer({
         id: "country-fills",
         type: "fill",
         source: "countries",
         "source-layer": "country_boundaries",
-        filter: [
-          "all",
-          ["==", ["get", "disputed"], "false"],
-          ["any",
-            ["==", "all", ["get", "worldview"]],
-            ["in", "US", ["get", "worldview"]]
-          ]
-        ],
+        filter: countryFilter,
         paint: {
           "fill-color": "rgba(0,0,0,0)",
-          "fill-opacity": 0.8
+          "fill-opacity": ["case", ["boolean", ["feature-state", "hover"], false], 0.35, 0.8]
         }
       });
 
@@ -308,55 +921,233 @@
         type: "line",
         source: "countries",
         "source-layer": "country_boundaries",
-        filter: [
-          "all",
-          ["==", ["get", "disputed"], "false"],
-          ["any",
-            ["==", "all", ["get", "worldview"]],
-            ["in", "US", ["get", "worldview"]]
-          ]
-        ],
+        filter: countryFilter,
+        paint: { "line-color": "#ffffff", "line-width": 0.5 }
+      });
+
+      // --- Event points setup ---
+      map.addSource("events", {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] },
+        cluster: true,
+        clusterMaxZoom: 10,
+        clusterRadius: 40
+      });
+
+      map.addLayer({
+        id: "clusters",
+        type: "circle",
+        source: "events",
+        filter: ["has", "point_count"],
         paint: {
-          "line-color": "#ffffff",
-          "line-width": 0.5
+          "circle-color": [
+            "step", ["get", "point_count"],
+            "#fca44b", 25, "#f56030", 150, "#c0392b"
+          ],
+          "circle-radius": [
+            "step", ["get", "point_count"],
+            14, 25, 20, 150, 26
+          ],
+          "circle-opacity": 0.88,
+          "circle-stroke-width": 1.5,
+          "circle-stroke-color": "rgba(255,255,255,0.6)"
         }
       });
 
-      await switchMode("daily");
-
-      document.getElementById("daySlider").addEventListener("input", async (e) => {
-        await renderSelectionByIndex(Number(e.target.value));
+      map.addLayer({
+        id: "cluster-count",
+        type: "symbol",
+        source: "events",
+        filter: ["has", "point_count"],
+        layout: {
+          "text-field": "{point_count_abbreviated}",
+          "text-font": ["DIN Offc Pro Medium", "Arial Unicode MS Bold"],
+          "text-size": 11
+        },
+        paint: { "text-color": "#ffffff" }
       });
 
-      document.getElementById("btnDaily").addEventListener("click", async () => {
-        await switchMode("daily");
+      map.addLayer({
+        id: "unclustered-point",
+        type: "circle",
+        source: "events",
+        filter: ["!", ["has", "point_count"]],
+        paint: {
+          "circle-color": "#f56030",
+          "circle-radius": 5,
+          "circle-stroke-width": 1,
+          "circle-stroke-color": "#fff"
+        }
       });
 
-      document.getElementById("btnWeekly").addEventListener("click", async () => {
-        await switchMode("weekly");
+      // --- Choropleth interactions ---
+      map.on("click", "country-fills", e => {
+        if (!e.features.length) return;
+        const props = e.features[0].properties;
+        const iso3  = props.iso_3166_1_alpha_3;
+        const name  = props.name_en || iso3;
+
+        if (viewMode === "political") {
+          const geo = e.features[0].geometry;
+          const b = new mapboxgl.LngLatBounds();
+          (geo.type === "Polygon" ? [geo.coordinates] : geo.coordinates)
+            .forEach(poly => poly[0].forEach(c => b.extend(c)));
+          tsCountryBounds = b;
+          showTimeSeries(iso3, name);
+          return;
+        }
+
+        // Activity mode: zoom to country
+        const geo = e.features[0].geometry;
+        const bounds = new mapboxgl.LngLatBounds();
+        (geo.type === "Polygon" ? [geo.coordinates] : geo.coordinates)
+          .forEach(poly => poly[0].forEach(c => bounds.extend(c)));
+        map.fitBounds(bounds, { padding: 40, maxZoom: 5, duration: 1000 });
       });
 
-      document.getElementById("btnMonthly").addEventListener("click", async () => {
-        await switchMode("monthly");
-      });
-
-      map.on("mousemove", "country-fills", (e) => {
-        const feature = e.features[0];
-        const iso3 = feature.properties.iso_3166_1_alpha_3;
-        const name = feature.properties.name_en || feature.properties.name || iso3;
-        const count = countByIso[iso3] || 0;
-
+      map.on("mousemove", "country-fills", e => {
+        if (!e.features.length) return;
+        if (hoveredCountryId !== null) {
+          map.setFeatureState(
+            { source: "countries", sourceLayer: "country_boundaries", id: hoveredCountryId },
+            { hover: false }
+          );
+        }
+        hoveredCountryId = e.features[0].id;
+        map.setFeatureState(
+          { source: "countries", sourceLayer: "country_boundaries", id: hoveredCountryId },
+          { hover: true }
+        );
         map.getCanvas().style.cursor = "pointer";
-
-        popup
-          .setLngLat(e.lngLat)
-          .setHTML(`<strong>${name}</strong><br>Articles: ${count}`)
-          .addTo(map);
       });
 
       map.on("mouseleave", "country-fills", () => {
+        if (hoveredCountryId !== null) {
+          map.setFeatureState(
+            { source: "countries", sourceLayer: "country_boundaries", id: hoveredCountryId },
+            { hover: false }
+          );
+        }
+        hoveredCountryId = null;
         map.getCanvas().style.cursor = "";
-        popup.remove();
+      });
+
+      // --- Event point interactions ---
+      let clusterClickTimer = null;
+
+      map.on("click", "clusters", e => {
+        const f = map.queryRenderedFeatures(e.point, { layers: ["clusters"] });
+        if (!f.length) return;
+        const clusterId = f[0].properties.cluster_id;
+        // Delay so a double-click can cancel this
+        clusterClickTimer = setTimeout(async () => {
+          clusterClickTimer = null;
+          try {
+            const leaves = await clusterLeaves(map.getSource("events"), clusterId, 100);
+            showArticlePanel(leaves);
+          } catch(err) { console.error("clusterLeaves error:", err); }
+        }, 250);
+      });
+
+      map.on("dblclick", "clusters", e => {
+        // Cancel the single-click article panel
+        if (clusterClickTimer) { clearTimeout(clusterClickTimer); clusterClickTimer = null; }
+        const f = map.queryRenderedFeatures(e.point, { layers: ["clusters"] });
+        if (!f.length) return;
+        const clusterId = f[0].properties.cluster_id;
+        map.getSource("events").getClusterExpansionZoom(clusterId, (err, zoom) => {
+          if (!err) map.easeTo({ center: f[0].geometry.coordinates, zoom: zoom + 1 });
+        });
+        e.originalEvent.stopPropagation(); // prevent map-level double-click zoom
+      });
+
+      map.on("click", "unclustered-point", e => {
+        showArticlePanel(e.features);
+      });
+
+      map.on("mouseenter", "clusters", () => {
+        map.getCanvas().style.cursor = "pointer";
+      });
+      map.on("mouseleave", "clusters", () => {
+        map.getCanvas().style.cursor = "";
+      });
+      map.on("mouseenter", "unclustered-point", () => {
+        map.getCanvas().style.cursor = "pointer";
+      });
+      map.on("mouseleave", "unclustered-point", () => {
+        map.getCanvas().style.cursor = "";
+      });
+
+      // --- Initial render ---
+      await switchMode("daily");
+
+      // --- UI event listeners ---
+      document.getElementById("daySlider").addEventListener("input", async e => {
+        await renderSelectionByIndex(Number(e.target.value));
+      });
+      document.getElementById("btnDaily").addEventListener("click", () => switchMode("daily"));
+      document.getElementById("btnWeekly").addEventListener("click", () => switchMode("weekly"));
+      document.getElementById("btnMonthly").addEventListener("click", () => switchMode("monthly"));
+      document.getElementById("locateBtn").addEventListener("click", locateUser);
+      document.getElementById("zoomOutBtn").addEventListener("click", () => {
+        map.flyTo({ center: [10, 20], zoom: 1.2, essential: true });
+      });
+
+      document.getElementById("btnActivity").addEventListener("click", async () => {
+        if (viewMode === "activity") return;
+        viewMode = "activity";
+        document.getElementById("btnActivity").classList.add("active");
+        document.getElementById("btnPolitical").classList.remove("active");
+        closeTimeSeries();
+        await renderSelectionByIndex(Number(document.getElementById("daySlider").value));
+      });
+
+      document.getElementById("btnPolitical").addEventListener("click", async () => {
+        if (viewMode === "political") return;
+        viewMode = "political";
+        document.getElementById("btnPolitical").classList.add("active");
+        document.getElementById("btnActivity").classList.remove("active");
+        await renderSelectionByIndex(Number(document.getElementById("daySlider").value));
+      });
+
+      document.getElementById("tsClose").addEventListener("click", closeTimeSeries);
+
+      document.getElementById("infoBtn").addEventListener("click", () => {
+        document.getElementById("infoOverlay").classList.add("visible");
+      });
+      document.getElementById("infoModalClose").addEventListener("click", () => {
+        document.getElementById("infoOverlay").classList.remove("visible");
+      });
+      document.getElementById("infoOverlay").addEventListener("click", e => {
+        if (e.target === document.getElementById("infoOverlay"))
+          document.getElementById("infoOverlay").classList.remove("visible");
+      });
+      document.getElementById("articlePanelClose").addEventListener("click", closeArticlePanel);
+
+      document.getElementById("showEvents").addEventListener("change", e => {
+        eventsVisible = e.target.checked;
+        applyPointFilter();
+      });
+
+      const allCatIds = CATEGORIES.map(c => c.id);
+      const catBtns   = document.querySelectorAll(".cat-btn");
+
+      function setCatActive(ids) {
+        activeCats = new Set(ids);
+        catBtns.forEach(b => b.classList.toggle("active", activeCats.has(b.dataset.cat)));
+        applyPointFilter();
+      }
+
+      catBtns.forEach(btn => {
+        btn.addEventListener("click", () => {
+          const cat = btn.dataset.cat;
+          // If this is the only active one, restore all
+          if (activeCats.size === 1 && activeCats.has(cat)) {
+            setCatActive(allCatIds);
+          } else {
+            setCatActive([cat]);
+          }
+        });
       });
     });
   </script>

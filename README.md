@@ -42,7 +42,7 @@ git push -u origin <branch>
 To host the website, open Terminal and:
 
 ``` bash
-python -m http.server 8000
+python serve.py
 ```
 
 Then in your Browser:
