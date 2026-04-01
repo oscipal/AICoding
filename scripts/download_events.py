@@ -59,11 +59,12 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 import requests
+import yaml
 
 # ── Configuration ────────────────────────────────────────────────────────────
-_cfg_path = Path(__file__).parent.parent / "config.json"
+_cfg_path = Path(__file__).parent.parent / "configs/config.yml"
 with open(_cfg_path) as _f:
-    _cfg = json.load(_f)
+    _cfg = yaml.safe_load(_f)
 
 MASTER_LIST_URL = _cfg["master_list_url"]
 OUTPUT_DIR      = Path(_cfg["output_dir"])

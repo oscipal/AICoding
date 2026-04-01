@@ -1,0 +1,5 @@
+master_list_url: "http://data.gdeltproject.org/gdeltv2/masterfilelist.txt"
+output_dir:      "docs/points_data"
+goldstein_dir:   "docs/goldstein_data"
+mb_data_dir:     "docs/mb_data"
+min_geo_type:    3
