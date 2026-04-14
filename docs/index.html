@@ -218,6 +218,80 @@
     /* popup */
     .mapboxgl-popup-content { padding: 0; border-radius: 8px; overflow: hidden; }
     .event-popup { padding: 10px 12px; max-width: 260px; font-size: 12px; }
+
+    /* ── Controls toggle button (mobile only) ─────────────── */
+    #controlsToggle {
+      display: none;
+    }
+
+    /* ── Mobile layout ────────────────────────────────────── */
+    @media (max-width: 640px) {
+      #controlsToggle {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: absolute;
+        top: 12px; left: 12px;
+        z-index: 12;
+        width: 40px; height: 40px;
+        background: rgba(255,255,255,0.97);
+        border: 1px solid #ccc;
+        border-radius: 8px;
+        font-size: 20px;
+        cursor: pointer;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        line-height: 1;
+      }
+
+      #controls {
+        top: 62px;
+        left: 12px;
+        width: calc(100vw - 24px);
+        max-height: calc(100vh - 80px);
+        display: none;
+      }
+      #controls.open { display: block; }
+
+      #articlePanel {
+        top: auto;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        width: 100%;
+        max-height: 60vh;
+        border-radius: 12px 12px 0 0;
+      }
+
+      #infoBtn {
+        top: 12px;
+        right: 12px;
+        width: 40px; height: 40px;
+      }
+
+      #tsPanel {
+        height: 190px;
+        padding: 8px 10px 6px;
+      }
+
+      #modeButtons button, .util-btn {
+        padding: 8px 10px;
+        font-size: 13px;
+        min-height: 36px;
+      }
+
+      .cat-btn {
+        padding: 5px 10px;
+        font-size: 12px;
+      }
+
+      #daySlider {
+        height: 28px;
+      }
+
+      .toggle-row label {
+        font-size: 13px;
+      }
+    }
     .event-popup .popup-type {
       font-weight: 700; font-size: 13px;
       margin-bottom: 4px;
@@ -233,6 +307,7 @@
   </style>
 </head>
 <body>
+  <button id="controlsToggle" title="Toggle controls">&#9776;</button>
   <div id="controls">
 
     <!-- View mode -->
@@ -1148,6 +1223,17 @@
             setCatActive([cat]);
           }
         });
+      });
+
+      document.getElementById("controlsToggle").addEventListener("click", () => {
+        document.getElementById("controls").classList.toggle("open");
+      });
+
+      // Close controls panel when user taps the map on mobile
+      map.on("click", () => {
+        if (window.innerWidth <= 640) {
+          document.getElementById("controls").classList.remove("open");
+        }
       });
     });
   </script>
