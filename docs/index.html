@@ -598,11 +598,13 @@
       document.getElementById("articleList").innerHTML =
         features.map(f => renderArticleItem(f.properties)).join("");
       document.getElementById("articlePanel").classList.add("visible");
+      document.getElementById("infoBtn").style.display = "none";
       popup.remove();
     }
 
     function closeArticlePanel() {
       document.getElementById("articlePanel").classList.remove("visible");
+      document.getElementById("infoBtn").style.display = "";
     }
 
     function clusterLeaves(source, clusterId, limit) {
