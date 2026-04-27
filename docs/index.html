@@ -524,6 +524,12 @@
         Domains with generic TLDs (.com, .org, .net) are grouped as "US / International" as their
         origin cannot be reliably determined.</li>
       </ul>
+
+      <hr class="info-divider">
+      <p style="font-size:11px;color:#888;margin-top:12px">
+        Data provided by the <a href="https://www.gdeltproject.org/" target="_blank" rel="noopener" style="color:#1f6feb">GDELT Project</a>
+        under <a href="https://creativecommons.org/licenses/by/3.0/" target="_blank" rel="noopener" style="color:#1f6feb">CC BY 3.0</a>.
+      </p>
       </div>
     </div>
   </div>
@@ -718,13 +724,11 @@
           .forEach(poly => poly[0].forEach(c => bounds.extend(c)));
       });
       if (bounds.isEmpty()) return;
-      const span = bounds.getNorthEast().lng - bounds.getSouthWest().lng;
-      if (span > 60) {
-        // Very wide country (US, Russia, Canada…) — fly to center at fixed zoom
-        map.flyTo({ center: bounds.getCenter(), zoom: 3, duration: 800 });
-      } else {
-        map.fitBounds(bounds, { padding: 60, maxZoom: 5, duration: 800 });
-      }
+      const camera = map.cameraForBounds(bounds, { padding: 60 });
+      if (!camera) return;
+      // Clamp zoom: min 3 (large countries don't zoom too far out),
+      // max 5 (small countries don't zoom too far in)
+      map.flyTo({ center: camera.center, zoom: Math.max(Math.min(camera.zoom, 5), 3), duration: 800 });
     }
 
     function setupCountrySearch() {
@@ -851,6 +855,77 @@
     }
 
     // ── Media origins ─────────────────────────────────────────
+    const DOMAIN_COUNTRY = {
+      // United States
+      "apnews.com":"United States","upi.com":"United States","nytimes.com":"United States",
+      "washingtonpost.com":"United States","wsj.com":"United States","usatoday.com":"United States",
+      "cnn.com":"United States","foxnews.com":"United States","nbcnews.com":"United States",
+      "cbsnews.com":"United States","abcnews.go.com":"United States","npr.org":"United States",
+      "politico.com":"United States","thehill.com":"United States","bloomberg.com":"United States",
+      "businessinsider.com":"United States","huffpost.com":"United States","vox.com":"United States",
+      "axios.com":"United States","time.com":"United States","newsweek.com":"United States",
+      "theatlantic.com":"United States","latimes.com":"United States","nypost.com":"United States",
+      "chicagotribune.com":"United States","bostonglobe.com":"United States",
+      "sfgate.com":"United States","seattletimes.com":"United States",
+      "forbes.com":"United States","fortune.com":"United States","wired.com":"United States",
+      "slate.com":"United States","salon.com":"United States","motherjones.com":"United States",
+      "breitbart.com":"United States","thedailybeast.com":"United States",
+      "militarytimes.com":"United States","defensenews.com":"United States",
+      // United Kingdom
+      "reuters.com":"United Kingdom","reuters.net":"United Kingdom",
+      "theguardian.com":"United Kingdom","bbc.com":"United Kingdom",
+      "telegraph.co.uk":"United Kingdom","thetimes.co.uk":"United Kingdom",
+      "independent.co.uk":"United Kingdom","dailymail.co.uk":"United Kingdom",
+      "thesun.co.uk":"United Kingdom","mirror.co.uk":"United Kingdom",
+      "ft.com":"United Kingdom","economist.com":"United Kingdom","sky.com":"United Kingdom",
+      "standard.co.uk":"United Kingdom","express.co.uk":"United Kingdom",
+      // France
+      "afp.com":"France","france24.com":"France","lemonde.fr":"France",
+      "lefigaro.fr":"France","liberation.fr":"France","rfi.fr":"France",
+      // Germany
+      "dw.com":"Germany","spiegel.de":"Germany","faz.net":"Germany",
+      "zeit.de":"Germany","sueddeutsche.de":"Germany","handelsblatt.com":"Germany",
+      // Qatar / Middle East
+      "aljazeera.com":"Qatar","aljazeera.net":"Qatar",
+      "arabnews.com":"Saudi Arabia","khaleejtimes.com":"UAE","gulfnews.com":"UAE",
+      // Russia
+      "rt.com":"Russia","tass.com":"Russia","tass.ru":"Russia","interfax.com":"Russia",
+      "sputniknews.com":"Russia","sputnik.md":"Russia",
+      // China
+      "xinhuanet.com":"China","xinhua.net":"China","chinadaily.com.cn":"China",
+      "globaltimes.cn":"China","cgtn.com":"China","peopledaily.com.cn":"China",
+      // India
+      "thehindu.com":"India","timesofindia.com":"India","ndtv.com":"India",
+      "hindustantimes.com":"India","indianexpress.com":"India","livemint.com":"India",
+      // Pakistan
+      "dawn.com":"Pakistan","geo.tv":"Pakistan","thenews.com.pk":"Pakistan",
+      // Australia
+      "abc.net.au":"Australia","smh.com.au":"Australia","theaustralian.com.au":"Australia",
+      "news.com.au":"Australia","heraldsun.com.au":"Australia",
+      // Canada
+      "globeandmail.com":"Canada","cbc.ca":"Canada","nationalpost.com":"Canada",
+      "torontostar.com":"Canada","montrealgazette.com":"Canada",
+      // Japan & Korea
+      "japantimes.co.jp":"Japan","nhk.or.jp":"Japan","asahi.com":"Japan",
+      "koreatimes.co.kr":"South Korea","koreaherald.com":"South Korea","yonhapnews.co.kr":"South Korea",
+      // Israel
+      "haaretz.com":"Israel","timesofisrael.com":"Israel","jpost.com":"Israel",
+      // Turkey & Iran
+      "dailysabah.com":"Turkey","hurriyet.com.tr":"Turkey",
+      "presstv.com":"Iran","presstv.ir":"Iran","irna.ir":"Iran",
+      // Singapore & Southeast Asia
+      "straitstimes.com":"Singapore","channelnewsasia.com":"Singapore",
+      "bangkokpost.com":"Thailand","scmp.com":"Hong Kong",
+      // Africa
+      "punchng.com":"Nigeria","vanguardngr.com":"Nigeria","businessday.ng":"Nigeria",
+      "theeastafrican.co.ke":"Kenya","nation.co.ke":"Kenya",
+      "egyptindependent.com":"Egypt","ahram.org.eg":"Egypt",
+      // Other
+      "irishtimes.com":"Ireland","rte.ie":"Ireland",
+      "nzherald.co.nz":"New Zealand","stuff.co.nz":"New Zealand",
+      "efe.com":"Spain","ansa.it":"Italy","naharnet.com":"Lebanon",
+    };
+
     const TLD_COUNTRY = {
       "co.uk":"United Kingdom","ac.uk":"United Kingdom","org.uk":"United Kingdom",
       "uk":"United Kingdom","de":"Germany","fr":"France","it":"Italy","es":"Spain",
@@ -860,7 +935,7 @@
       "gr":"Greece","ru":"Russia","ua":"Ukraine","cn":"China","jp":"Japan",
       "kr":"South Korea","in":"India","pk":"Pakistan","bd":"Bangladesh",
       "au":"Australia","com.au":"Australia","nz":"New Zealand",
-      "br":"Brazil","mx":"Mexico","ar":"Argentina","co":"Colombia","cl":"Chile",
+      "br":"Brazil","mx":"Mexico","ar":"Argentina","cl":"Chile",
       "za":"South Africa","ng":"Nigeria","ke":"Kenya","gh":"Ghana","eg":"Egypt",
       "ma":"Morocco","ca":"Canada","il":"Israel","tr":"Turkey","ir":"Iran",
       "sa":"Saudi Arabia","ae":"UAE","qa":"Qatar","sg":"Singapore",
@@ -870,6 +945,7 @@
     function domainToCountry(domain) {
       if (!domain) return "Unknown";
       const d = domain.toLowerCase().replace(/^www\./, "");
+      if (DOMAIN_COUNTRY[d]) return DOMAIN_COUNTRY[d];
       const parts = d.split(".");
       if (parts.length >= 3) {
         const last2 = parts.slice(-2).join(".");
@@ -878,7 +954,7 @@
       const tld = parts[parts.length - 1];
       if (TLD_COUNTRY[tld]) return TLD_COUNTRY[tld];
       if (["com","org","net","edu","info","biz","io","gov","mil"].includes(tld))
-        return "US / International";
+        return "International";
       return "Other";
     }
 
