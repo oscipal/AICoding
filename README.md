@@ -50,3 +50,7 @@ python scripts/download_events.py 20260101 20260107
 ## Data source
 
 [GDELT Events 2.0](http://data.gdeltproject.org/gdeltv2/masterfilelist.txt) — scans news from around the world every 15 minutes and extracts political actor-to-actor events using the CAMEO coding scheme. Coverage is dominated by English-language and Western media.
+
+## License
+
+Data provided by the [GDELT Project](https://www.gdeltproject.org/) under [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/).
