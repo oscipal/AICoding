@@ -2,7 +2,6 @@
 # $ conda create --name <env> --file <this file>
 # platform: win-64
 # created-by: conda 25.7.0
-blas=1.0=mkl
 bzip2=1.0.8=h2bbff1b_6
 ca-certificates=2025.12.2=haa95532_0
 cairo=1.18.4=he9e932c_0
