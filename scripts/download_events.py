@@ -375,8 +375,30 @@ def process_day(day_key, urls, force=False, summary_limit=None):
         json.dump(geojson, f, ensure_ascii=False, indent=2)
     print(f"\n  Saved summarized points -> {summarized_path}  ({summarized_path.stat().st_size / 1e6:.1f} MB)")
 
+    # Keep points_data lightweight for fast frontend map loading.
+    light_features = []
+    for feat in all_features:
+        props = feat.get("properties", {})
+        light_features.append({
+            "type": "Feature",
+            "geometry": feat.get("geometry", {}),
+            "properties": {
+                "date": props.get("date"),
+                "data_day": day_key,
+                "location": props.get("location"),
+                "geo_type": props.get("geo_type"),
+                "category": props.get("category"),
+                "event_type": props.get("event_type"),
+                "goldstein": props.get("goldstein"),
+                "tone": props.get("tone"),
+                "source": props.get("source"),
+                "url": props.get("url"),
+            },
+        })
+
+    points_geojson = {"type": "FeatureCollection", "features": light_features}
     with open(out_path, "w", encoding="utf-8") as f:
-        json.dump(geojson, f, separators=(",", ":"))
+        json.dump(points_geojson, f, separators=(",", ":"))
     print(f"  Saved points   -> {out_path}  ({out_path.stat().st_size / 1e6:.1f} MB)")
 
     # ── Goldstein aggregation per Actor1 country ──────────────────────────────
