@@ -58,6 +58,10 @@ from datetime import date, timedelta
 from pathlib import Path
 from urllib.parse import urlparse
 
+import nltk
+nltk.download('punkt')
+nltk.download('punkt_tab')
+
 import requests
 import yaml
 
@@ -70,10 +74,11 @@ MASTER_LIST_URL = _cfg["master_list_url"]
 OUTPUT_DIR      = Path(_cfg["output_dir"])
 GOLDSTEIN_DIR   = Path(_cfg["goldstein_dir"])
 MB_DATA_DIR     = Path(_cfg["mb_data_dir"])
+GEOJSON_DIR     = Path(_cfg["geojson_path"])
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 GOLDSTEIN_DIR.mkdir(parents=True, exist_ok=True)
 MB_DATA_DIR.mkdir(parents=True, exist_ok=True)
-
+GEOJSON_DIR.mkdir(parents=True, exist_ok=True)
 MIN_GEO_TYPE = _cfg["min_geo_type"]
 
 # Raise CSV field size limit for large GDELT fields
@@ -259,7 +264,7 @@ def process_zip(url, session, seen_ids, seen_urls):
 
 # ── Process one day ───────────────────────────────────────────────────────────
 def process_day(day_key, urls, force=False):
-    out_path = OUTPUT_DIR / f"{day_key}.geojson"
+    out_path = GEOJSON_DIR / f"{day_key}.geojson"
     if out_path.exists() and not force:
         print(f"  {day_key}  already exists, skipping. (use --force to overwrite)")
         return
@@ -282,7 +287,53 @@ def process_day(day_key, urls, force=False):
 
     print(f"\n  {day_key}  {len(all_features):,} point features  {len(all_gs_rows):,} events")
 
+
+    # ── Summarize articles and attach to features ─────────────────────────────
+    from newspaper import Article
+    from sumy.parsers.plaintext import PlaintextParser
+    from sumy.nlp.tokenizers import Tokenizer
+    from sumy.summarizers.lex_rank import LexRankSummarizer
+
+    def sumy_summarize(text, num_sentences=3):
+        parser = PlaintextParser.from_string(text, Tokenizer("english"))
+        summarizer = LexRankSummarizer()
+        summary = summarizer(parser.document, num_sentences)
+        return ' '.join(str(sentence) for sentence in summary)
+
+    def extract_title_and_summary(url, num_sentences=3):
+        try:
+            article = Article(url)
+            article.download()
+            article.parse()
+            text = article.text
+            title = article.title
+            if not text or len(text.strip()) < 100:
+                summary = "Article text extraction failed or was too short."
+            else:
+                summary = sumy_summarize(text, num_sentences=num_sentences)
+            return title, summary
+        except Exception as e:
+            return "Failed to extract title", f"Failed to summarize: {e}"
+
+    print(f"  Summarizing {len(all_features)} articles...")
+    for i, feature in enumerate(all_features):
+        url = feature["properties"].get("url", "")
+        if url:
+            title, summary = extract_title_and_summary(url, num_sentences=3)
+            feature["properties"]["title"] = title
+            feature["properties"]["summary"] = summary
+        else:
+            feature["properties"]["title"] = "No URL"
+            feature["properties"]["summary"] = "No summary available."
+        if (i + 1) % 25 == 0 or (i + 1) == len(all_features):
+            print(f"    [{i+1}/{len(all_features)}] summarized", end="\r")
+
     geojson = {"type": "FeatureCollection", "features": all_features}
+    summarized_path = OUTPUT_DIR / f"{day_key}_with_summary.geojson"
+    with open(summarized_path, "w", encoding="utf-8") as f:
+        json.dump(geojson, f, ensure_ascii=False, indent=2)
+    print(f"\n  Saved summarized points -> {summarized_path}  ({summarized_path.stat().st_size / 1e6:.1f} MB)")
+
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(geojson, f, separators=(",", ":"))
     print(f"  Saved points   -> {out_path}  ({out_path.stat().st_size / 1e6:.1f} MB)")
@@ -328,6 +379,63 @@ def process_day(day_key, urls, force=False):
     with open(mb_path, "w", encoding="utf-8") as f:
         json.dump(mb_data, f, separators=(",", ":"))
     print(f"  Saved mb_data   -> {mb_path}")
+
+
+# Summarize articles using LexRank (after downloading Events 2.0 data) to attach
+# a title and summary to each point feature based on the SOURCEURL article text.
+
+def sumy_summarize(text, num_sentences=3):
+    from sumy.summarizers.lex_rank import LexRankSummarizer
+    parser = PlaintextParser.from_string(text, Tokenizer("english"))
+    summarizer = LexRankSummarizer()
+    summary = summarizer(parser.document, num_sentences)
+    return ' '.join(str(sentence) for sentence in summary)
+
+def extract_title_and_summary(url, num_sentences=3):
+    """
+    Given a news article URL, downloads the article, extracts the title and a summary.
+    Returns (title, summary). If extraction fails, returns error messages.
+    """
+    try:
+        article = Article(url)
+        article.download()
+        article.parse()
+        text = article.text
+        title = article.title
+
+        if not text or len(text.strip()) < 100:
+            summary = "Article text extraction failed or was too short."
+        else:
+            summary = sumy_summarize(text, num_sentences=num_sentences)
+        return title, summary
+    except Exception as e:
+        return "Failed to extract title", f"Failed to summarize: {e}"
+
+
+def process_geojson_and_attach_summaries():
+    """
+    Loads the GeoJSON file specified in configs/config.yml, extracts title and summary for each article URL,
+    attaches them to the properties, and saves to a new file with '_with_summary.geojson' suffix.
+    """
+    # Load config
+    _cfg_path = Path(__file__).parent.parent / "configs/config.yml"
+    with open(_cfg_path) as _f:
+        _cfg = yaml.safe_load(_f)
+
+    geojson_path = Path(_cfg["geojson_path"])
+    with open(geojson_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    for i, feature in enumerate(data["features"]):
+        url = feature["properties"].get("url", "")
+        title, summary = extract_title_and_summary(url, num_sentences=3)
+        feature["properties"]["title"] = title
+        feature["properties"]["summary"] = summary
+        print(f"\nURL: {url}\nTITLE: {title}\nSUMMARY: {summary}\n")
+
+    new_geojson_path = geojson_path.replace('.geojson', '_with_summary.geojson')
+    with open(new_geojson_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────
@@ -381,6 +489,9 @@ def main():
         json.dump(all_dates, f)
     print(f"\nUpdated {dates_path}  ({len(all_dates)} dates)")
     print("Done.")
+
+
+
 
 
 if __name__ == "__main__":

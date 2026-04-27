@@ -19,19 +19,19 @@ jobs:
           python-version: '3.12'
 
       - name: Install dependencies
-        run: pip install requests pyyaml
+        run: pip install requests pyyaml newspaper3k sumy nltk numpy
 
       - name: Download yesterday's GDELT data
         run: |
           DATE=$(date -u -d "yesterday" +%Y%m%d)
           echo "Downloading data for $DATE"
           python scripts/download_events.py $DATE
-
+          
       - name: Commit and push new data
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add docs/points_data/ docs/goldstein_data/ docs/mb_data/
+          git add docs/points_data/ docs/goldstein_data/ docs/mb_data/ docs/final_data/
           git diff --cached --quiet && echo "No new data" || \
             git commit -m "data: add GDELT data for $(date -u -d yesterday +%Y-%m-%d)" && \
             git push
