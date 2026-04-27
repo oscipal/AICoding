@@ -3,7 +3,12 @@ name: Download daily GDELT data
 on:
   schedule:
     - cron: '0 8 * * *'   # 08:00 UTC — previous day's GDELT data is fully available
-  workflow_dispatch:        # allow manual trigger from the Actions tab
+  workflow_dispatch:
+    inputs:
+      summary_limit:
+        description: "Optional: limit number of articles summarized for quick tests"
+        required: false
+        default: ""
 
 jobs:
   download:
@@ -25,7 +30,12 @@ jobs:
         run: |
           DATE=$(date -u -d "yesterday" +%Y%m%d)
           echo "Downloading data for $DATE"
-          python scripts/download_events.py $DATE
+          if [ -n "${{ github.event.inputs.summary_limit }}" ]; then
+            echo "Quick test mode: summary_limit=${{ github.event.inputs.summary_limit }}"
+            python scripts/download_events.py $DATE --summary-limit "${{ github.event.inputs.summary_limit }}"
+          else
+            python scripts/download_events.py $DATE
+          fi
           
       - name: Commit and push new data
         run: |

@@ -15,6 +15,7 @@ Usage:
   python scripts/download_events.py                      # all dates in mb_data/dates.json
   python scripts/download_events.py 20260301             # single date
   python scripts/download_events.py 20260301 20260307    # date range (inclusive)
+    python scripts/download_events.py 20260301 --summary-limit 200
 
 GDELT Events 2.0 column reference (tab-separated, NO header row):
   See: http://data.gdeltproject.org/documentation/GDELT-Event_Codebook-V2.0.pdf
@@ -50,9 +51,11 @@ ActionGeo type codes (same scale as GKG V2ENHANCEDLOCATIONS):
 """
 
 import csv
+import concurrent.futures
 import io
 import json
 import sys
+import warnings
 import zipfile
 from datetime import date, timedelta
 from pathlib import Path
@@ -80,6 +83,8 @@ GOLDSTEIN_DIR.mkdir(parents=True, exist_ok=True)
 MB_DATA_DIR.mkdir(parents=True, exist_ok=True)
 GEOJSON_DIR.mkdir(parents=True, exist_ok=True)
 MIN_GEO_TYPE = _cfg["min_geo_type"]
+SUMMARY_WORKERS = max(int(_cfg.get("summary_workers", 16)), 1)
+SUMMARY_REQUEST_TIMEOUT_SEC = max(int(_cfg.get("summary_request_timeout_sec", 15)), 1)
 
 # Raise CSV field size limit for large GDELT fields
 csv.field_size_limit(10_000_000)
@@ -263,7 +268,7 @@ def process_zip(url, session, seen_ids, seen_urls):
 
 
 # ── Process one day ───────────────────────────────────────────────────────────
-def process_day(day_key, urls, force=False):
+def process_day(day_key, urls, force=False, summary_limit=None):
     out_path = GEOJSON_DIR / f"{day_key}.geojson"
     if out_path.exists() and not force:
         print(f"  {day_key}  already exists, skipping. (use --force to overwrite)")
@@ -290,43 +295,79 @@ def process_day(day_key, urls, force=False):
 
     # ── Summarize articles and attach to features ─────────────────────────────
     from newspaper import Article
+    from newspaper import Config as NewsConfig
     from sumy.parsers.plaintext import PlaintextParser
     from sumy.nlp.tokenizers import Tokenizer
     from sumy.summarizers.lex_rank import LexRankSummarizer
+    from sumy.summarizers.lsa import LsaSummarizer
 
     def sumy_summarize(text, num_sentences=3):
         parser = PlaintextParser.from_string(text, Tokenizer("english"))
-        summarizer = LexRankSummarizer()
-        summary = summarizer(parser.document, num_sentences)
+        # LexRank occasionally emits RuntimeWarning on degenerate inputs.
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                category=RuntimeWarning,
+                module=r"sumy\.summarizers\.lex_rank",
+            )
+            summary = LexRankSummarizer()(parser.document, num_sentences)
+        text_out = ' '.join(str(sentence) for sentence in summary).strip()
+        if text_out:
+            return text_out
+
+        # Fallback keeps summaries available when LexRank yields nothing useful.
+        summary = LsaSummarizer()(parser.document, num_sentences)
         return ' '.join(str(sentence) for sentence in summary)
 
     def extract_title_and_summary(url, num_sentences=3):
-        try:
-            article = Article(url)
-            article.download()
-            article.parse()
-            text = article.text
-            title = article.title
-            if not text or len(text.strip()) < 100:
-                summary = "Article text extraction failed or was too short."
-            else:
-                summary = sumy_summarize(text, num_sentences=num_sentences)
-            return title, summary
-        except Exception as e:
-            return "Failed to extract title", f"Failed to summarize: {e}"
+        cfg = NewsConfig()
+        cfg.request_timeout = SUMMARY_REQUEST_TIMEOUT_SEC
+        cfg.fetch_images = False
 
-    print(f"  Summarizing {len(all_features)} articles...")
-    for i, feature in enumerate(all_features):
+        last_exc = None
+        for _ in range(2):
+            try:
+                article = Article(url, config=cfg)
+                article.download()
+                article.parse()
+                text = article.text
+                title = article.title
+                if not text or len(text.strip()) < 100:
+                    summary = "Article text extraction failed or was too short."
+                else:
+                    summary = sumy_summarize(text, num_sentences=num_sentences)
+                return title, summary
+            except Exception as exc:
+                last_exc = exc
+
+        return "Failed to extract title", f"Failed to summarize: {last_exc}"
+
+    def summarize_feature(idx_feature):
+        idx, feature = idx_feature
         url = feature["properties"].get("url", "")
-        if url:
-            title, summary = extract_title_and_summary(url, num_sentences=3)
-            feature["properties"]["title"] = title
-            feature["properties"]["summary"] = summary
-        else:
-            feature["properties"]["title"] = "No URL"
-            feature["properties"]["summary"] = "No summary available."
-        if (i + 1) % 25 == 0 or (i + 1) == len(all_features):
-            print(f"    [{i+1}/{len(all_features)}] summarized", end="\r")
+        if not url:
+            return idx, "No URL", "No summary available."
+        return idx, *extract_title_and_summary(url, num_sentences=3)
+
+    if summary_limit is None:
+        summarize_targets = list(enumerate(all_features))
+    else:
+        summarize_targets = list(enumerate(all_features[:summary_limit]))
+
+    print(f"  Summarizing {len(summarize_targets)} articles with {SUMMARY_WORKERS} workers...")
+    done = 0
+    with concurrent.futures.ThreadPoolExecutor(max_workers=SUMMARY_WORKERS) as pool:
+        futures = [pool.submit(summarize_feature, target) for target in summarize_targets]
+        for fut in concurrent.futures.as_completed(futures):
+            idx, title, summary = fut.result()
+            all_features[idx]["properties"]["title"] = title
+            all_features[idx]["properties"]["summary"] = summary
+            done += 1
+            if done % 50 == 0 or done == len(summarize_targets):
+                print(f"    [{done}/{len(summarize_targets)}] summarized", end="\r")
+
+    if summary_limit is not None and len(all_features) > len(summarize_targets):
+        print(f"\n  Summary limit active: skipped {len(all_features) - len(summarize_targets):,} articles")
 
     geojson = {"type": "FeatureCollection", "features": all_features}
     summarized_path = OUTPUT_DIR / f"{day_key}_with_summary.geojson"
@@ -441,8 +482,37 @@ def process_geojson_and_attach_summaries():
 # ── Entry point ───────────────────────────────────────────────────────────────
 def main():
     argv = sys.argv[1:]
-    force = "--force" in argv
-    args  = [a for a in argv if not a.startswith("--")]
+    force = False
+    summary_limit = None
+    args = []
+
+    i = 0
+    while i < len(argv):
+        a = argv[i]
+        if a == "--force":
+            force = True
+        elif a.startswith("--summary-limit="):
+            try:
+                summary_limit = max(int(a.split("=", 1)[1]), 1)
+            except ValueError:
+                print("--summary-limit must be a positive integer")
+                sys.exit(1)
+        elif a == "--summary-limit":
+            if i + 1 >= len(argv):
+                print("--summary-limit requires a value")
+                sys.exit(1)
+            try:
+                summary_limit = max(int(argv[i + 1]), 1)
+            except ValueError:
+                print("--summary-limit must be a positive integer")
+                sys.exit(1)
+            i += 1
+        elif a.startswith("--"):
+            print(f"Unknown option: {a}")
+            sys.exit(1)
+        else:
+            args.append(a)
+        i += 1
 
     if len(args) == 0:
         dates_path = Path("docs/mb_data/dates.json")
@@ -461,7 +531,7 @@ def main():
         days = list(date_range(parse_date(args[0]), parse_date(args[1])))
 
     else:
-        print("Usage: python scripts/download_events.py [YYYYMMDD [YYYYMMDD]] [--force]")
+        print("Usage: python scripts/download_events.py [YYYYMMDD [YYYYMMDD]] [--force] [--summary-limit N]")
         sys.exit(1)
 
     print(f"Processing {len(days)} day(s): {days[0]} to {days[-1]}")
@@ -474,7 +544,7 @@ def main():
         if not urls:
             print(f"  {key}  no Events 2.0 files found in master list.")
             continue
-        process_day(key, urls, force=force)
+        process_day(key, urls, force=force, summary_limit=summary_limit)
 
     # ── Update dates.json with all available days ─────────────────────────────
     dates_path = MB_DATA_DIR / "dates.json"
