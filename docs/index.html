@@ -140,12 +140,41 @@
       padding: 8px 12px; border-bottom: 1px solid #f0f0f0;
     }
     .article-item:last-child { border-bottom: none; }
+    .article-title {
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.35;
+      margin-bottom: 4px;
+      color: #222;
+    }
     .article-cat { font-weight: 700; font-size: 11px; margin-bottom: 2px; }
     .article-event { font-size: 12px; font-weight: 600; margin-bottom: 2px; }
     .article-loc { font-size: 11px; color: #555; margin-bottom: 3px; }
     .article-meta { font-size: 11px; color: #777; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
     .article-link { color: #1f6feb; text-decoration: none; font-size: 11px; }
     .article-link:hover { text-decoration: underline; }
+    .article-summary-wrap { margin-top: 4px; }
+    .article-summary-toggle {
+      cursor: pointer;
+      font-size: 11px;
+      color: #1f6feb;
+      user-select: none;
+      list-style: none;
+    }
+    .article-summary-toggle::-webkit-details-marker { display: none; }
+    .article-summary-toggle::before {
+      content: "▸";
+      color: #666;
+      margin-right: 4px;
+    }
+    .article-summary-wrap[open] .article-summary-toggle::before { content: "▾"; }
+    .article-summary {
+      margin-top: 4px;
+      font-size: 11px;
+      color: #444;
+      line-height: 1.45;
+      white-space: normal;
+    }
 
     /* info button */
     #infoBtn {
@@ -636,6 +665,7 @@
     const goldsteinAggCache   = { weekly: {}, monthly: {} };
     const pointsCache         = {};
     const goldsteinCache      = {};
+    const summaryIndexCache   = {};
 
     // time series
     let tsChart        = null;
@@ -1001,29 +1031,94 @@
 
     // ── Article panel ────────────────────────────────────────
     function renderArticleItem(props) {
+      const esc = s => String(s ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/\"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+
       const cat      = CAT_BY_ID[featureCategory(props)] || CAT_BY_ID["diplomacy"];
       const toneNum  = parseFloat(props.tone);
       const toneStr  = isNaN(toneNum) ? "" :
         `<span style="color:${toneNum < -2 ? "#e74c3c" : toneNum > 2 ? "#27ae60" : "#888"}">
           ${toneNum > 0 ? "+" : ""}${toneNum.toFixed(1)} tone</span>`;
       const link = props.url
-        ? `<a class="article-link" href="${props.url}" target="_blank" rel="noopener">${props.source || "source"}</a>`
-        : (props.source || "—");
+        ? `<a class="article-link" href="${esc(props.url)}" target="_blank" rel="noopener">${esc(props.source || "source")}</a>`
+        : esc(props.source || "—");
+      const title = esc(props.title || props.event_type || "Untitled article");
+      const summary = esc(props.summary || "No summary available.");
       return `
         <div class="article-item">
+          <div class="article-title">${title}</div>
           <div class="article-cat" style="color:${cat.color}">${cat.label}</div>
-          <div class="article-event">${props.event_type || ""}</div>
-          <div class="article-loc">📍 ${props.location || "Unknown"}</div>
+          <div class="article-event">${esc(props.event_type || "")}</div>
+          <div class="article-loc">📍 ${esc(props.location || "Unknown")}</div>
           <div class="article-meta">${toneStr}${link}</div>
+          <details class="article-summary-wrap">
+            <summary class="article-summary-toggle">Show summary</summary>
+            <div class="article-summary">${summary}</div>
+          </details>
         </div>`;
     }
 
-    function showArticlePanel(features) {
+    async function loadSummaryIndex(dayKey) {
+      if (summaryIndexCache[dayKey]) return summaryIndexCache[dayKey];
+
+      const res = await fetch(`./final_data/${dayKey}_with_summary.geojson`);
+      if (!res.ok) {
+        summaryIndexCache[dayKey] = {};
+        return summaryIndexCache[dayKey];
+      }
+
+      const data = await res.json();
+      const idx = {};
+      for (const f of data.features || []) {
+        const p = f.properties || {};
+        const url = p.url;
+        if (!url || idx[url]) continue;
+        idx[url] = {
+          title: p.title,
+          summary: p.summary,
+        };
+      }
+      summaryIndexCache[dayKey] = idx;
+      return idx;
+    }
+
+    function getSummaryDayKeys(features) {
+      const fromFeatures = [...new Set(features
+        .map(f => f?.properties?.data_day)
+        .filter(Boolean))];
+      if (fromFeatures.length) return fromFeatures;
+
+      if (currentMode === "daily" && currentDayKey) return [currentDayKey];
+
+      const slider = document.getElementById("daySlider");
+      const periodKey = availablePeriods[Number(slider.value)];
+      if (!periodKey) return [];
+
+      return availableDays.filter(d =>
+        currentMode === "weekly" ? getWeekKey(d) === periodKey : getMonthKey(d) === periodKey
+      );
+    }
+
+    async function showArticlePanel(features) {
+      const dayKeys = getSummaryDayKeys(features);
+      const indexes = await Promise.all(dayKeys.map(loadSummaryIndex));
+      const merged = Object.assign({}, ...indexes);
+
+      const enriched = features.map(f => {
+        const props = f.properties || {};
+        const extra = merged[props.url] || {};
+        return { ...f, properties: { ...props, ...extra } };
+      });
+
       const n = features.length;
       document.getElementById("articlePanelTitle").textContent =
         `${n} article${n !== 1 ? "s" : ""}`;
       document.getElementById("articleList").innerHTML =
-        features.map(f => renderArticleItem(f.properties)).join("");
+        enriched.map(f => renderArticleItem(f.properties)).join("");
       document.getElementById("articlePanel").classList.add("visible");
       document.getElementById("infoBtn").style.display = "none";
       popup.remove();
@@ -1584,7 +1679,7 @@
           clusterClickTimer = null;
           try {
             const leaves = await clusterLeaves(map.getSource("events"), clusterId, 100);
-            showArticlePanel(leaves);
+            await showArticlePanel(leaves);
           } catch(err) { console.error("clusterLeaves error:", err); }
         }, 250);
       });
@@ -1601,8 +1696,8 @@
         e.originalEvent.stopPropagation(); // prevent map-level double-click zoom
       });
 
-      map.on("click", "unclustered-point", e => {
-        showArticlePanel(e.features);
+      map.on("click", "unclustered-point", async e => {
+        await showArticlePanel(e.features);
       });
 
       map.on("mouseenter", "clusters", () => {
