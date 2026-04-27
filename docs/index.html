@@ -171,13 +171,20 @@
       background: white; border-radius: 10px;
       width: 480px; max-width: calc(100vw - 32px);
       max-height: calc(100vh - 48px);
-      overflow-y: auto;
-      padding: 24px 28px;
+      display: flex; flex-direction: column;
       box-shadow: 0 8px 32px rgba(0,0,0,0.25);
-      position: relative;
     }
-    #infoModal h2 { font-size: 16px; margin: 0 0 4px; }
-    #infoModal h3 { font-size: 13px; margin: 18px 0 6px; color: #333; }
+    #infoModalHeader {
+      display: flex; justify-content: space-between; align-items: flex-start;
+      padding: 20px 24px 12px; flex-shrink: 0;
+      border-bottom: 1px solid #eee;
+    }
+    #infoModalBody {
+      overflow-y: auto; flex: 1;
+      padding: 12px 24px 20px;
+    }
+    #infoModal h2 { font-size: 16px; margin: 0 0 2px; }
+    #infoModal h3 { font-size: 13px; margin: 16px 0 6px; color: #333; }
     #infoModal p, #infoModal li { font-size: 12px; color: #444; line-height: 1.6; margin: 0 0 6px; }
     #infoModal ul { padding-left: 18px; margin: 0 0 6px; }
     #infoModal .cat-dot {
@@ -185,9 +192,8 @@
       border-radius: 50%; margin-right: 5px; vertical-align: middle;
     }
     #infoModalClose {
-      position: absolute; top: 14px; right: 16px;
       border: none; background: none; cursor: pointer;
-      font-size: 22px; color: #888; line-height: 1;
+      font-size: 22px; color: #888; line-height: 1; flex-shrink: 0; margin-left: 12px;
     }
     #infoModalClose:hover { color: #333; }
     .info-divider { border: none; border-top: 1px solid #eee; margin: 16px 0 0; }
@@ -348,15 +354,18 @@
     .most-active-name { font-weight: 600; }
     .most-active-val { color: #666; font-variant-numeric: tabular-nums; }
 
-    /* ── Source breakdown ─────────────────────────────────── */
-    #sourceSummary {
-      padding: 5px 12px 5px; border-bottom: 1px solid #e5e5e5;
-      display: flex; flex-wrap: wrap; gap: 4px; min-height: 0;
+    /* ── Media origins ────────────────────────────────────── */
+    .media-origin-item {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 2px 4px; margin: 1px -4px;
+      border-radius: 4px; font-size: 11px;
     }
-    .source-chip {
-      background: #eef2ff; border: 1px solid #c7d2fe;
-      border-radius: 10px; padding: 1px 7px; font-size: 10px; color: #3730a3;
+    .media-origin-bar-wrap {
+      flex: 1; margin: 0 8px; height: 4px;
+      background: #eee; border-radius: 2px; overflow: hidden;
     }
+    .media-origin-bar { height: 100%; background: #4292c6; border-radius: 2px; }
+    .media-origin-val { color: #666; font-variant-numeric: tabular-nums; min-width: 36px; text-align: right; }
   </style>
 </head>
 <body>
@@ -419,6 +428,12 @@
     <!-- Most active countries -->
     <div class="section-title" id="mostActiveTitle">Most Active</div>
     <div id="mostActive"></div>
+
+    <hr class="divider">
+
+    <!-- Media origins -->
+    <div class="section-title">Media Origins</div>
+    <div id="mediaOrigins"><div style="font-size:11px;color:#999">Loading…</div></div>
   </div>
 
   <div id="map"></div>
@@ -429,11 +444,14 @@
   <!-- Info modal -->
   <div id="infoOverlay">
     <div id="infoModal">
-      <button id="infoModalClose">×</button>
-      <h2>World News Map</h2>
-      <p style="color:#777;font-size:11px">Powered by the GDELT Project</p>
-
-      <hr class="info-divider">
+      <div id="infoModalHeader">
+        <div>
+          <h2>World News Map</h2>
+          <p style="color:#777;font-size:11px;margin:0">Powered by the GDELT Project</p>
+        </div>
+        <button id="infoModalClose">×</button>
+      </div>
+      <div id="infoModalBody">
 
       <h3>Data source</h3>
       <p>This map uses the <strong>GDELT Events 2.0</strong> dataset, which automatically scans
@@ -501,9 +519,12 @@
         period. In News Activity mode: highest event count. In Goldstein mode: most conflictual
         (lowest score). In Tone mode: most negative coverage. Click any entry to fly to that
         country.</li>
-        <li><strong>Source breakdown</strong> — when you click a cluster of events, the article
-        panel shows which news outlets are represented in the selection.</li>
+        <li><strong>Media Origins</strong> — shows which countries the news outlets covering the
+        current period's events are from, inferred from domain TLDs (e.g. <em>.de</em> → Germany).
+        Domains with generic TLDs (.com, .org, .net) are grouped as "US / International" as their
+        origin cannot be reliably determined.</li>
       </ul>
+      </div>
     </div>
   </div>
 
@@ -513,7 +534,6 @@
       <span id="articlePanelTitle">Articles</span>
       <button id="articlePanelClose">×</button>
     </div>
-    <div id="sourceSummary"></div>
     <div id="articleList"></div>
   </div>
 
@@ -697,7 +717,14 @@
         (geo.type === "Polygon" ? [geo.coordinates] : geo.coordinates)
           .forEach(poly => poly[0].forEach(c => bounds.extend(c)));
       });
-      if (!bounds.isEmpty()) map.fitBounds(bounds, { padding: 60, maxZoom: 5, duration: 800 });
+      if (bounds.isEmpty()) return;
+      const span = bounds.getNorthEast().lng - bounds.getSouthWest().lng;
+      if (span > 60) {
+        // Very wide country (US, Russia, Canada…) — fly to center at fixed zoom
+        map.flyTo({ center: bounds.getCenter(), zoom: 3, duration: 800 });
+      } else {
+        map.fitBounds(bounds, { padding: 60, maxZoom: 5, duration: 800 });
+      }
     }
 
     function setupCountrySearch() {
@@ -823,18 +850,63 @@
       });
     }
 
-    // ── Source breakdown ─────────────────────────────────────
-    function renderSourceSummary(features) {
-      const el = document.getElementById("sourceSummary");
+    // ── Media origins ─────────────────────────────────────────
+    const TLD_COUNTRY = {
+      "co.uk":"United Kingdom","ac.uk":"United Kingdom","org.uk":"United Kingdom",
+      "uk":"United Kingdom","de":"Germany","fr":"France","it":"Italy","es":"Spain",
+      "nl":"Netherlands","be":"Belgium","ch":"Switzerland","at":"Austria",
+      "se":"Sweden","no":"Norway","dk":"Denmark","fi":"Finland","pl":"Poland",
+      "cz":"Czech Republic","hu":"Hungary","ro":"Romania","pt":"Portugal",
+      "gr":"Greece","ru":"Russia","ua":"Ukraine","cn":"China","jp":"Japan",
+      "kr":"South Korea","in":"India","pk":"Pakistan","bd":"Bangladesh",
+      "au":"Australia","com.au":"Australia","nz":"New Zealand",
+      "br":"Brazil","mx":"Mexico","ar":"Argentina","co":"Colombia","cl":"Chile",
+      "za":"South Africa","ng":"Nigeria","ke":"Kenya","gh":"Ghana","eg":"Egypt",
+      "ma":"Morocco","ca":"Canada","il":"Israel","tr":"Turkey","ir":"Iran",
+      "sa":"Saudi Arabia","ae":"UAE","qa":"Qatar","sg":"Singapore",
+      "my":"Malaysia","th":"Thailand","ph":"Philippines","id":"Indonesia","vn":"Vietnam",
+    };
+
+    function domainToCountry(domain) {
+      if (!domain) return "Unknown";
+      const d = domain.toLowerCase().replace(/^www\./, "");
+      const parts = d.split(".");
+      if (parts.length >= 3) {
+        const last2 = parts.slice(-2).join(".");
+        if (TLD_COUNTRY[last2]) return TLD_COUNTRY[last2];
+      }
+      const tld = parts[parts.length - 1];
+      if (TLD_COUNTRY[tld]) return TLD_COUNTRY[tld];
+      if (["com","org","net","edu","info","biz","io","gov","mil"].includes(tld))
+        return "US / International";
+      return "Other";
+    }
+
+    function renderMediaOrigins() {
+      const el = document.getElementById("mediaOrigins");
+      if (!el) return;
+      if (viewMode !== "activity" || !allPointsForDay.length) {
+        el.innerHTML = '<div style="font-size:11px;color:#999">Not available in this view</div>';
+        return;
+      }
       const counts = {};
-      features.forEach(f => {
-        const src = f.properties.source;
-        if (src) counts[src] = (counts[src] || 0) + 1;
+      allPointsForDay.forEach(f => {
+        const country = domainToCountry(f.properties.source);
+        counts[country] = (counts[country] || 0) + 1;
       });
-      const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 8);
-      el.innerHTML = sorted.map(([src, n]) =>
-        `<span class="source-chip">${src}${n > 1 ? ` ×${n}` : ""}</span>`
-      ).join("");
+      const total = Object.values(counts).reduce((a, b) => a + b, 0);
+      const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+      const top = sorted.slice(0, 6);
+      const otherCount = sorted.slice(6).reduce((a, [, n]) => a + n, 0);
+      if (otherCount > 0) top.push(["Other", otherCount]);
+      el.innerHTML = top.map(([label, n]) => {
+        const pct = Math.round(n / total * 100);
+        return `<div class="media-origin-item">
+          <span style="min-width:120px;font-weight:600">${label}</span>
+          <div class="media-origin-bar-wrap"><div class="media-origin-bar" style="width:${pct}%"></div></div>
+          <span class="media-origin-val">${n.toLocaleString()}</span>
+        </div>`;
+      }).join("");
     }
 
     function formatDayLabel(dayKey) {
@@ -874,7 +946,6 @@
       const n = features.length;
       document.getElementById("articlePanelTitle").textContent =
         `${n} article${n !== 1 ? "s" : ""}`;
-      renderSourceSummary(features);
       document.getElementById("articleList").innerHTML =
         features.map(f => renderArticleItem(f.properties)).join("");
       document.getElementById("articlePanel").classList.add("visible");
@@ -908,6 +979,7 @@
 
       const labels    = [];
       const scores    = [];
+      const tones     = [];
       const counts    = [];
       const periodKeys = [];   // used by onClick to navigate
 
@@ -918,6 +990,7 @@
           const entry = allData[i].find(d => d.iso3 === iso3);
           labels.push(`${day.slice(4,6)}/${day.slice(6,8)}`);
           scores.push(entry ? entry.goldstein : null);
+          tones.push(entry ? (entry.avg_tone ?? null) : null);
           counts.push(entry ? entry.n : 0);
           periodKeys.push(day);
         }
@@ -928,10 +1001,13 @@
           const entry = allAgg[i].find(d => d.iso3 === iso3);
           labels.push(periods[i]);
           scores.push(entry ? entry.goldstein : null);
+          tones.push(entry ? (entry.avg_tone ?? null) : null);
           counts.push(entry ? entry.n : 0);
           periodKeys.push(periods[i]);
         }
       }
+
+      const hasTone = tones.some(t => t !== null);
 
       const ctx = document.getElementById("tsChart").getContext("2d");
       if (tsChart) tsChart.destroy();
@@ -951,6 +1027,18 @@
               pointRadius: 0,
               pointHoverRadius: 4,
             },
+            ...(hasTone ? [{
+              label: "Avg Tone",
+              data: tones,
+              borderColor: "#e67e22",
+              backgroundColor: "rgba(230,126,34,0.0)",
+              tension: 0.35,
+              fill: false,
+              spanGaps: true,
+              pointRadius: 0,
+              pointHoverRadius: 4,
+              borderDash: [4, 3],
+            }] : []),
             {
               label: "Event Count",
               data: counts,
@@ -975,6 +1063,7 @@
             viewMode = "activity";
             document.getElementById("btnActivity").classList.add("active");
             document.getElementById("btnPolitical").classList.remove("active");
+            document.getElementById("politicalSubMode").classList.remove("visible");
             await switchMode(currentMode);
             const slider  = document.getElementById("daySlider");
             const pIdx    = availablePeriods.indexOf(periodKey);
@@ -995,7 +1084,7 @@
             x: { ticks: { font: { size: 10 } } },
             y: {
               min: -10, max: 10,
-              title: { display: true, text: "Goldstein", font: { size: 10 } },
+              title: { display: true, text: "Score", font: { size: 10 } },
               ticks: { font: { size: 10 } },
               grid: {
                 color: ctx => ctx.tick.value === 0 ? "rgba(0,0,0,0.35)" : "rgba(0,0,0,0.06)"
@@ -1112,6 +1201,7 @@
       for (const id of ["clusters","cluster-count","unclustered-point"]) {
         map.setLayoutProperty(id, "visibility", visibility);
       }
+      renderMediaOrigins();
     }
 
     // ── Render choropleth + points for a given selection ─────
@@ -1156,6 +1246,7 @@
         }
         currentDayKey = periodKey;
         renderMostActive();
+        renderMediaOrigins();
         return;
       }
 
