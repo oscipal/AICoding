@@ -7,9 +7,15 @@ An interactive map of global political events powered by the [GDELT Project](htt
 ## What it does
 
 - Displays geo-located news events from GDELT Events 2.0, updated daily
-- Two views: **News Activity** (event density per country) and **Political Landscape** (Goldstein score choropleth)
+- **News Activity** view: event density choropleth per country with clustered event points
+- **Political Landscape** view with two sub-modes:
+  - **Goldstein** — colors countries by weighted average Goldstein score (event type, −10 to +10)
+  - **Tone** — colors countries by average media sentiment (how articles are written, not what they describe)
 - Filter events by category (conflict, protest, diplomacy, etc.) and time period (daily / weekly / monthly)
-- Click a country in Political Landscape mode to see a time series of its Goldstein score
+- **Country search** — type a country name to fly to it; opens its Goldstein time series in political mode
+- **Most Active** list — top 5 countries for the current view (highest activity, most conflictual, or most negative tone)
+- **Source breakdown** — clicking a cluster shows which news outlets are represented
+- Click a country in Political Landscape mode to see a Goldstein time series
 
 ## Data pipeline
 

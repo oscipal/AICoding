@@ -304,17 +304,78 @@
       background: #f0f0f0; border-radius: 10px;
       padding: 1px 6px; font-size: 10px; color: #444;
     }
+
+    /* ── Country search ───────────────────────────────────── */
+    #countrySearch {
+      width: 100%; box-sizing: border-box;
+      border: 1px solid #ccc; border-radius: 6px;
+      padding: 6px 8px; font-size: 12px;
+      margin-bottom: 4px; outline: none;
+    }
+    #countrySearch:focus { border-color: #1f6feb; }
+    #countryDropdown {
+      background: white; border: 1px solid #ddd; border-radius: 6px;
+      max-height: 160px; overflow-y: auto;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+      display: none; margin-bottom: 6px;
+    }
+    #countryDropdown.open { display: block; }
+    .country-opt {
+      padding: 5px 10px; cursor: pointer; font-size: 12px;
+    }
+    .country-opt:hover, .country-opt.kbd-selected { background: #f0f0f0; }
+
+    /* ── Political sub-mode ───────────────────────────────── */
+    #politicalSubMode {
+      display: none; gap: 6px; margin-bottom: 8px; margin-top: 4px;
+    }
+    #politicalSubMode.visible { display: flex; }
+    #politicalSubMode button {
+      flex: 1; border: 1px solid #ccc; background: white;
+      padding: 5px 8px; border-radius: 6px; cursor: pointer; font-size: 12px;
+    }
+    #politicalSubMode button.active {
+      background: #1f6feb; color: white; border-color: #1f6feb;
+    }
+
+    /* ── Most active ──────────────────────────────────────── */
+    .most-active-item {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 3px 4px; margin: 1px -4px;
+      border-radius: 4px; cursor: pointer; font-size: 11px;
+    }
+    .most-active-item:hover { background: #f5f5f5; }
+    .most-active-name { font-weight: 600; }
+    .most-active-val { color: #666; font-variant-numeric: tabular-nums; }
+
+    /* ── Source breakdown ─────────────────────────────────── */
+    #sourceSummary {
+      padding: 5px 12px 5px; border-bottom: 1px solid #e5e5e5;
+      display: flex; flex-wrap: wrap; gap: 4px; min-height: 0;
+    }
+    .source-chip {
+      background: #eef2ff; border: 1px solid #c7d2fe;
+      border-radius: 10px; padding: 1px 7px; font-size: 10px; color: #3730a3;
+    }
   </style>
 </head>
 <body>
   <button id="controlsToggle" title="Toggle controls">&#9776;</button>
   <div id="controls">
 
+    <!-- Country search -->
+    <input type="text" id="countrySearch" placeholder="Search country…" autocomplete="off" />
+    <div id="countryDropdown"></div>
+
     <!-- View mode -->
     <div class="section-title">View</div>
     <div id="viewButtons">
       <button id="btnActivity" class="active">News Activity</button>
       <button id="btnPolitical">Political Landscape</button>
+    </div>
+    <div id="politicalSubMode">
+      <button id="btnGoldstein" class="active">Goldstein</button>
+      <button id="btnTone">Tone</button>
     </div>
 
     <hr class="divider">
@@ -352,6 +413,12 @@
       <button class="cat-btn active" data-cat="disagreement">Demands &amp; Rejection</button>
       <button class="cat-btn active" data-cat="diplomacy">Diplomacy &amp; Cooperation</button>
     </div>
+
+    <hr class="divider">
+
+    <!-- Most active countries -->
+    <div class="section-title" id="mostActiveTitle">Most Active</div>
+    <div id="mostActive"></div>
   </div>
 
   <div id="map"></div>
@@ -395,7 +462,7 @@
       </ul>
 
       <h3>Goldstein scale</h3>
-      <p>The <strong>Political Landscape</strong> view colors countries by their
+      <p>The <strong>Goldstein</strong> sub-mode of Political Landscape colors countries by their
       <strong>Goldstein score</strong> — a fixed value assigned to each event type ranging
       from <strong>−10</strong> (most destabilizing) to <strong>+10</strong> (most
       cooperative). The map shows each country's <em>weighted average Goldstein score as
@@ -410,6 +477,33 @@
         <li><span class="cat-dot" style="background:#d73027"></span> −6 to −3 — very conflictual</li>
         <li><span class="cat-dot" style="background:#a50026"></span> &lt; −6 — highly destabilizing</li>
       </ul>
+
+      <h3>Media tone</h3>
+      <p>The <strong>Tone</strong> sub-mode colors countries by the <strong>average media tone</strong>
+      of news articles in which that country appears as the initiating actor. Tone is derived from
+      GDELT's sentiment analysis of the article text, ranging from very negative (red) to very
+      positive (green). Unlike the Goldstein score — which reflects the event type — tone reflects
+      how the article is <em>written</em>. A country can have cooperative event types but very
+      negative media framing, and vice versa.</p>
+      <ul>
+        <li><span class="cat-dot" style="background:#1a9641"></span> &gt; +2 — positive coverage</li>
+        <li><span class="cat-dot" style="background:#91cf60"></span> 0 to +2 — slightly positive</li>
+        <li><span class="cat-dot" style="background:#fee090"></span> −2 to 0 — slightly negative</li>
+        <li><span class="cat-dot" style="background:#fc8d59"></span> −5 to −2 — negative</li>
+        <li><span class="cat-dot" style="background:#d73027"></span> &lt; −5 — very negative</li>
+      </ul>
+
+      <h3>Other controls</h3>
+      <ul>
+        <li><strong>Country search</strong> — type a country name to fly to it on the map. In
+        Political Landscape mode, this also opens the Goldstein time series for that country.</li>
+        <li><strong>Most Active</strong> — shows the top 5 countries for the current view and
+        period. In News Activity mode: highest event count. In Goldstein mode: most conflictual
+        (lowest score). In Tone mode: most negative coverage. Click any entry to fly to that
+        country.</li>
+        <li><strong>Source breakdown</strong> — when you click a cluster of events, the article
+        panel shows which news outlets are represented in the selection.</li>
+      </ul>
     </div>
   </div>
 
@@ -419,6 +513,7 @@
       <span id="articlePanelTitle">Articles</span>
       <button id="articlePanelClose">×</button>
     </div>
+    <div id="sourceSummary"></div>
     <div id="articleList"></div>
   </div>
 
@@ -493,8 +588,10 @@
       zoom: 1.2
     });
 
-    let viewMode      = "activity";  // "activity" | "political"
+    let viewMode         = "activity";   // "activity" | "political"
+    let politicalSubMode = "goldstein"; // "goldstein" | "tone"
     let currentMode   = "daily";
+    let countryNameMap = {};
     let currentDayKey = "";
     let availableDays = [];
     let availablePeriods = [];
@@ -558,6 +655,188 @@
       return lookup;
     }
 
+    // ── Tone color scale ─────────────────────────────────────
+    function colorForTone(score) {
+      if (score === null || score === undefined) return "rgba(0,0,0,0)";
+      if (score >  2) return "#1a9641";
+      if (score >  0) return "#91cf60";
+      if (score > -2) return "#fee090";
+      if (score > -5) return "#fc8d59";
+      return "#d73027";
+    }
+
+    function buildToneExpression(rows) {
+      const expr = ["match", ["get", "iso_3166_1_alpha_3"]];
+      for (const r of rows) {
+        if (!r.iso3 || r.avg_tone === null || r.avg_tone === undefined) continue;
+        expr.push(r.iso3, colorForTone(r.avg_tone));
+      }
+      expr.push("rgba(0,0,0,0)");
+      return expr;
+    }
+
+    // ── Country name lookup ──────────────────────────────────
+    function buildCountryList() {
+      const features = map.querySourceFeatures("countries", { sourceLayer: "country_boundaries" });
+      features.forEach(f => {
+        const iso3 = f.properties.iso_3166_1_alpha_3;
+        const name = f.properties.name_en;
+        if (iso3 && name && !countryNameMap[iso3]) countryNameMap[iso3] = name;
+      });
+    }
+
+    function flyToCountry(iso3) {
+      const features = map.querySourceFeatures("countries", {
+        sourceLayer: "country_boundaries",
+        filter: ["==", ["get", "iso_3166_1_alpha_3"], iso3]
+      });
+      if (!features.length) return;
+      const bounds = new mapboxgl.LngLatBounds();
+      features.forEach(f => {
+        const geo = f.geometry;
+        (geo.type === "Polygon" ? [geo.coordinates] : geo.coordinates)
+          .forEach(poly => poly[0].forEach(c => bounds.extend(c)));
+      });
+      if (!bounds.isEmpty()) map.fitBounds(bounds, { padding: 60, maxZoom: 5, duration: 800 });
+    }
+
+    function setupCountrySearch() {
+      const input    = document.getElementById("countrySearch");
+      const dropdown = document.getElementById("countryDropdown");
+      let matches = [];
+      let kbdIdx  = -1;
+
+      function renderDropdown(q) {
+        kbdIdx = -1;
+        dropdown.innerHTML = "";
+        if (!q) { dropdown.classList.remove("open"); return; }
+        matches = Object.entries(countryNameMap)
+          .filter(([iso3, name]) =>
+            name.toLowerCase().includes(q) || iso3.toLowerCase().startsWith(q))
+          .sort((a, b) => {
+            const ai = a[1].toLowerCase().indexOf(q);
+            const bi = b[1].toLowerCase().indexOf(q);
+            return (ai === 0 ? -1 : bi === 0 ? 1 : ai - bi) || a[1].localeCompare(b[1]);
+          })
+          .slice(0, 8);
+        if (!matches.length) { dropdown.classList.remove("open"); return; }
+        matches.forEach(([iso3, name]) => {
+          const div = document.createElement("div");
+          div.className = "country-opt";
+          div.textContent = name;
+          div.addEventListener("click", () => selectCountry(iso3, name));
+          dropdown.appendChild(div);
+        });
+        dropdown.classList.add("open");
+      }
+
+      input.addEventListener("input", e => renderDropdown(e.target.value.trim().toLowerCase()));
+
+      input.addEventListener("keydown", e => {
+        const opts = dropdown.querySelectorAll(".country-opt");
+        if (e.key === "ArrowDown") {
+          kbdIdx = Math.min(kbdIdx + 1, opts.length - 1);
+          opts.forEach((o, i) => o.classList.toggle("kbd-selected", i === kbdIdx));
+          e.preventDefault();
+        } else if (e.key === "ArrowUp") {
+          kbdIdx = Math.max(kbdIdx - 1, 0);
+          opts.forEach((o, i) => o.classList.toggle("kbd-selected", i === kbdIdx));
+          e.preventDefault();
+        } else if (e.key === "Enter" && kbdIdx >= 0 && matches[kbdIdx]) {
+          const [iso3, name] = matches[kbdIdx];
+          selectCountry(iso3, name);
+          e.preventDefault();
+        } else if (e.key === "Escape") {
+          dropdown.classList.remove("open");
+          input.blur();
+        }
+      });
+
+      document.addEventListener("click", e => {
+        if (!input.contains(e.target) && !dropdown.contains(e.target))
+          dropdown.classList.remove("open");
+      });
+    }
+
+    function selectCountry(iso3, name) {
+      document.getElementById("countrySearch").value = name;
+      document.getElementById("countryDropdown").classList.remove("open");
+      buildCountryList(); // ensure tiles are sampled before flying
+      flyToCountry(iso3);
+      if (viewMode === "political" && goldsteinByIso[iso3]) showTimeSeries(iso3, name);
+    }
+
+    // ── Most Active ──────────────────────────────────────────
+    function renderMostActive() {
+      const el       = document.getElementById("mostActive");
+      const titleEl  = document.getElementById("mostActiveTitle");
+      if (!el) return;
+      let entries = [];
+
+      if (viewMode === "activity") {
+        titleEl.textContent = "Most Active";
+        entries = Object.entries(countByIso)
+          .filter(([, n]) => n > 0)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 5)
+          .map(([iso3, n]) => ({ iso3, name: countryNameMap[iso3] || iso3, value: n.toLocaleString() + " events" }));
+      } else if (politicalSubMode === "goldstein") {
+        titleEl.textContent = "Most Conflictual";
+        entries = Object.entries(goldsteinByIso)
+          .filter(([, d]) => d && d.goldstein !== undefined)
+          .sort((a, b) => a[1].goldstein - b[1].goldstein)
+          .slice(0, 5)
+          .map(([iso3, d]) => ({
+            iso3, name: countryNameMap[iso3] || iso3,
+            value: (d.goldstein > 0 ? "+" : "") + d.goldstein.toFixed(1)
+          }));
+      } else {
+        titleEl.textContent = "Most Negative Tone";
+        entries = Object.entries(goldsteinByIso)
+          .filter(([, d]) => d && d.avg_tone !== null && d.avg_tone !== undefined)
+          .sort((a, b) => a[1].avg_tone - b[1].avg_tone)
+          .slice(0, 5)
+          .map(([iso3, d]) => ({
+            iso3, name: countryNameMap[iso3] || iso3,
+            value: (d.avg_tone > 0 ? "+" : "") + d.avg_tone.toFixed(1) + " tone"
+          }));
+      }
+
+      if (!entries.length) {
+        el.innerHTML = '<div style="font-size:11px;color:#999;padding:2px 0">No data</div>';
+        return;
+      }
+      el.innerHTML = entries.map(e =>
+        `<div class="most-active-item" data-iso3="${e.iso3}">
+          <span class="most-active-name">${e.name}</span>
+          <span class="most-active-val">${e.value}</span>
+        </div>`
+      ).join("");
+      el.querySelectorAll(".most-active-item").forEach(item => {
+        item.addEventListener("click", () => {
+          const iso3 = item.dataset.iso3;
+          buildCountryList();
+          flyToCountry(iso3);
+          if (viewMode === "political" && goldsteinByIso[iso3])
+            showTimeSeries(iso3, countryNameMap[iso3] || iso3);
+        });
+      });
+    }
+
+    // ── Source breakdown ─────────────────────────────────────
+    function renderSourceSummary(features) {
+      const el = document.getElementById("sourceSummary");
+      const counts = {};
+      features.forEach(f => {
+        const src = f.properties.source;
+        if (src) counts[src] = (counts[src] || 0) + 1;
+      });
+      const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 8);
+      el.innerHTML = sorted.map(([src, n]) =>
+        `<span class="source-chip">${src}${n > 1 ? ` ×${n}` : ""}</span>`
+      ).join("");
+    }
+
     function formatDayLabel(dayKey) {
       return `${dayKey.slice(0,4)}-${dayKey.slice(4,6)}-${dayKey.slice(6,8)}`;
     }
@@ -595,6 +874,7 @@
       const n = features.length;
       document.getElementById("articlePanelTitle").textContent =
         `${n} article${n !== 1 ? "s" : ""}`;
+      renderSourceSummary(features);
       document.getElementById("articleList").innerHTML =
         features.map(f => renderArticleItem(f.properties)).join("");
       document.getElementById("articlePanel").classList.add("visible");
@@ -755,10 +1035,14 @@
       const totals = {};
       for (const data of allData) {
         for (const r of data) {
-          if (!totals[r.iso3]) totals[r.iso3] = { gs: 0, n: 0, conflict: 0 };
+          if (!totals[r.iso3]) totals[r.iso3] = { gs: 0, n: 0, conflict: 0, tone: 0, tone_n: 0 };
           totals[r.iso3].gs       += r.goldstein * r.n;
           totals[r.iso3].n        += r.n;
           totals[r.iso3].conflict += r.conflict_pct * r.n;
+          if (r.avg_tone !== null && r.avg_tone !== undefined) {
+            totals[r.iso3].tone   += r.avg_tone * r.n;
+            totals[r.iso3].tone_n += r.n;
+          }
         }
       }
       const result = Object.entries(totals)
@@ -768,6 +1052,7 @@
           goldstein:    Math.round(s.gs / s.n * 100) / 100,
           n:            s.n,
           conflict_pct: Math.round(s.conflict / s.n * 10) / 10,
+          avg_tone:     s.tone_n > 0 ? Math.round(s.tone / s.tone_n * 100) / 100 : null,
         }));
       goldsteinAggCache[mode][periodKey] = result;
       return result;
@@ -834,6 +1119,7 @@
       countByIso = makeCountLookup(rows);
       document.getElementById("dateLabel").textContent = label;
       map.setPaintProperty("country-fills", "fill-color", buildFillExpression(rows));
+      renderMostActive();
     }
 
     async function renderSelectionByIndex(index) {
@@ -849,17 +1135,27 @@
         }
         goldsteinByIso = makeGoldsteinLookup(gsData);
 
-        const label = currentMode === "daily"
-          ? `Political: ${formatDayLabel(periodKey)}`
-          : `Political ${currentMode.charAt(0).toUpperCase() + currentMode.slice(1)}: ${periodKey}`;
+        let fillExpression, label;
+        if (politicalSubMode === "tone") {
+          fillExpression = buildToneExpression(gsData);
+          label = currentMode === "daily"
+            ? `Tone: ${formatDayLabel(periodKey)}`
+            : `Tone ${currentMode.charAt(0).toUpperCase() + currentMode.slice(1)}: ${periodKey}`;
+        } else {
+          fillExpression = buildGoldsteinExpression(gsData);
+          label = currentMode === "daily"
+            ? `Goldstein: ${formatDayLabel(periodKey)}`
+            : `Goldstein ${currentMode.charAt(0).toUpperCase() + currentMode.slice(1)}: ${periodKey}`;
+        }
         document.getElementById("dateLabel").textContent = label;
-        map.setPaintProperty("country-fills", "fill-color", buildGoldsteinExpression(gsData));
+        map.setPaintProperty("country-fills", "fill-color", fillExpression);
 
         if (map.getSource("events")) {
           map.getSource("events").setData({ type: "FeatureCollection", features: [] });
           document.getElementById("eventsCount").textContent = "Event points not shown in Political Landscape mode";
         }
         currentDayKey = periodKey;
+        renderMostActive();
         return;
       }
 
@@ -1158,6 +1454,14 @@
       // --- Initial render ---
       await switchMode("daily");
 
+      // --- Country search setup ---
+      setupCountrySearch();
+      map.once("idle", () => {
+        buildCountryList();
+        renderMostActive();
+      });
+      map.on("moveend", buildCountryList);
+
       // --- UI event listeners ---
       document.getElementById("daySlider").addEventListener("input", async e => {
         await renderSelectionByIndex(Number(e.target.value));
@@ -1175,6 +1479,7 @@
         viewMode = "activity";
         document.getElementById("btnActivity").classList.add("active");
         document.getElementById("btnPolitical").classList.remove("active");
+        document.getElementById("politicalSubMode").classList.remove("visible");
         closeTimeSeries();
         await renderSelectionByIndex(Number(document.getElementById("daySlider").value));
       });
@@ -1184,6 +1489,23 @@
         viewMode = "political";
         document.getElementById("btnPolitical").classList.add("active");
         document.getElementById("btnActivity").classList.remove("active");
+        document.getElementById("politicalSubMode").classList.add("visible");
+        await renderSelectionByIndex(Number(document.getElementById("daySlider").value));
+      });
+
+      document.getElementById("btnGoldstein").addEventListener("click", async () => {
+        if (politicalSubMode === "goldstein") return;
+        politicalSubMode = "goldstein";
+        document.getElementById("btnGoldstein").classList.add("active");
+        document.getElementById("btnTone").classList.remove("active");
+        await renderSelectionByIndex(Number(document.getElementById("daySlider").value));
+      });
+
+      document.getElementById("btnTone").addEventListener("click", async () => {
+        if (politicalSubMode === "tone") return;
+        politicalSubMode = "tone";
+        document.getElementById("btnTone").classList.add("active");
+        document.getElementById("btnGoldstein").classList.remove("active");
         await renderSelectionByIndex(Number(document.getElementById("daySlider").value));
       });
 
