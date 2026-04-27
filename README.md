@@ -1,57 +1,46 @@
-# AI-Assisted Coding and Collaborative Project Development | Spring 2026
+# World News Map
 
-## Setup
+An interactive map of global political events powered by the [GDELT Project](https://www.gdeltproject.org/).
 
-### Repository
+**Live site:** [oscipal.github.io/AICoding](https://oscipal.github.io/AICoding/)
 
-Clone the repository:
+## What it does
 
-```bash
-git clone https://github.com/oscipal/AICoding.git
-cd AICoding
-```
+- Displays geo-located news events from GDELT Events 2.0, updated daily
+- Two views: **News Activity** (event density per country) and **Political Landscape** (Goldstein score choropleth)
+- Filter events by category (conflict, protest, diplomacy, etc.) and time period (daily / weekly / monthly)
+- Click a country in Political Landscape mode to see a time series of its Goldstein score
 
-### Dependencies
+## Data pipeline
 
-Create a conda environment, then install the dependencies:
+A GitHub Actions workflow runs every day at 08:00 UTC:
 
-```bash
-conda create --name aicoding --file requirements.txt
-conda activate aicoding
-```
+1. Downloads the previous day's GDELT Events 2.0 files
+2. Processes them into three outputs under `docs/`:
+   - `points_data/<YYYYMMDD>.geojson` — geo-located event points
+   - `goldstein_data/<YYYYMMDD>.json` — per-country Goldstein scores
+   - `mb_data/<YYYYMMDD>.json` — per-country event counts
+3. Commits and pushes the new data files, triggering a GitHub Pages deploy
 
-After installing new dependencies update requirements.txt:
+To trigger a manual run, go to **Actions → Download daily GDELT data → Run workflow**.
 
-```bash
-conda list -e > requirements.txt
-```
-
-### Pushing to repo
-
-After setting up the repo on your workstation, create a new branch and push changes to that:
+## Local development
 
 ```bash
-git checkout -b <branch>
-git add .
-git commit <commit message>
-git push -u origin <branch> 
+pip install requests pyyaml
+python serve.py          # serves docs/ at http://localhost:8000
 ```
 
-## Hosting the website
-
-To host the website, open Terminal and:
-
-``` bash
-python serve.py
-```
-
-Then in your Browser:
+To download data for a specific date range:
 
 ```bash
-http://localhost:8000/docs/index.html
+python scripts/download_events.py 20260101 20260107
 ```
 
-## Data Links
+## Configuration
 
-https://www.gdeltproject.org/
-http://data.gdeltproject.org/gkg/index.html
+`configs/config.yml` controls output directories and minimum geo precision for event points.
+
+## Data source
+
+[GDELT Events 2.0](http://data.gdeltproject.org/gdeltv2/masterfilelist.txt) — scans news from around the world every 15 minutes and extracts political actor-to-actor events using the CAMEO coding scheme. Coverage is dominated by English-language and Western media.
