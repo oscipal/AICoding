@@ -32,12 +32,14 @@ def extract_title_and_summary(url, num_sentences=3):
         title = article.title
 
         if not text or len(text.strip()) < 100:
-            summary = "Article text extraction failed or was too short."
+            summary = "No summary found"
         else:
             summary = sumy_summarize(text, num_sentences=num_sentences)
+        if not title or not title.strip():
+            title = "No title found"
         return title, summary
     except Exception as e:
-        return "Failed to extract title", f"Failed to summarize: {e}"
+        return "No title found", "No summary found"
 
 
 def process_geojson_and_attach_summaries():

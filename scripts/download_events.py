@@ -203,7 +203,11 @@ def process_zip(url, session, seen_ids, seen_urls):
                         gs = float(row[30])
                         nm = max(int(row[31]), 1)
                         qc = int(row[29])
-                        gs_rows.append((actor1_cc, gs, nm, qc))
+                        try:
+                            tone_val = float(row[34])
+                        except (ValueError, IndexError):
+                            tone_val = None
+                        gs_rows.append((actor1_cc, gs, nm, qc, tone_val))
                     except (ValueError, IndexError):
                         pass
 
@@ -405,14 +409,18 @@ def process_day(day_key, urls, force=False, summary_limit=None):
     # Weighted average Goldstein score (weight = NumMentions) per country code.
     # Only countries with at least 3 events are included to avoid noisy single-event outliers.
     from collections import defaultdict
-    stats = defaultdict(lambda: [0.0, 0, 0, 0])  # [gs*nm sum, nm sum, n, conflict_n]
-    for iso3, gs, nm, qc in all_gs_rows:
+    stats = defaultdict(lambda: [0.0, 0, 0, 0, 0.0, 0])
+    # [gs*nm sum, nm sum, n, conflict_n, tone_sum, tone_n]
+    for iso3, gs, nm, qc, tone in all_gs_rows:
         s = stats[iso3]
         s[0] += gs * nm
         s[1] += nm
         s[2] += 1
         if qc >= 3:
             s[3] += 1
+        if tone is not None:
+            s[4] += tone
+            s[5] += 1
 
     goldstein_data = sorted(
         [
@@ -421,6 +429,7 @@ def process_day(day_key, urls, force=False, summary_limit=None):
                 "goldstein":    round(s[0] / s[1], 2),
                 "n":            s[2],
                 "conflict_pct": round(100 * s[3] / s[2], 1),
+                "avg_tone":     round(s[4] / s[5], 2) if s[5] > 0 else None,
             }
             for iso3, s in stats.items()
             if s[1] > 0 and s[2] >= 3
