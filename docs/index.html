@@ -82,6 +82,22 @@
       margin-bottom: 8px;
     }
     .toggle-row label { font-weight: 600; cursor: pointer; }
+
+    #eventRenderButtons { display: flex; gap: 6px; margin-bottom: 8px; }
+    #eventRenderButtons button {
+      flex: 1;
+      border: 1px solid #ccc;
+      background: white;
+      padding: 5px 8px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 11px;
+    }
+    #eventRenderButtons button.active {
+      background: #1f6feb;
+      color: white;
+      border-color: #1f6feb;
+    }
     #eventsCount {
       font-size: 11px; color: #555;
       margin-bottom: 8px;
@@ -367,9 +383,13 @@
 
     <!-- Event points -->
     <div class="section-title">Event points</div>
+    <div id="eventRenderButtons">
+      <button id="btnRenderStandard" class="active">Standard</button>
+      <button id="btnRenderHybrid">Hybrid</button>
+    </div>
     <div class="toggle-row">
       <input type="checkbox" id="showEvents" checked>
-      <label for="showEvents">Show clustered events</label>
+      <label for="showEvents">Show events</label>
     </div>
     <div id="eventsCount">Loading…</div>
 
@@ -536,6 +556,8 @@
     let allPointsForDay = [];
     let activeCats = new Set(CATEGORIES.map(c => c.id));
     let eventsVisible = true;
+    let eventRenderMode = "standard"; // "standard" | "auto"
+    const HEATMAP_TO_POINTS_ZOOM = 5.5;
 
     const dailyCache          = {};
     const aggregateCache      = { weekly: {}, monthly: {} };
@@ -905,21 +927,46 @@
       return pointsCache[dayKey];
     }
 
+    function setEventRenderButtonState(mode) {
+      document.getElementById("btnRenderStandard").classList.toggle("active", mode === "standard");
+      document.getElementById("btnRenderHybrid").classList.toggle("active", mode === "auto");
+    }
+
+    function updateEventLayerVisibility() {
+      if (!map.getSource("events") || !map.getSource("events-raw")) return;
+
+      if (viewMode !== "activity" || !eventsVisible) {
+        for (const id of ["clusters", "cluster-count", "unclustered-point", "events-heatmap", "events-raw-point"]) {
+          map.setLayoutProperty(id, "visibility", "none");
+        }
+        return;
+      }
+
+      const zoom = map.getZoom();
+      const showStandard = eventRenderMode === "standard" || (eventRenderMode === "auto" && zoom >= HEATMAP_TO_POINTS_ZOOM);
+      const showAutoHeatmap = eventRenderMode === "auto" && zoom < HEATMAP_TO_POINTS_ZOOM;
+
+      map.setLayoutProperty("clusters", "visibility", showStandard ? "visible" : "none");
+      map.setLayoutProperty("cluster-count", "visibility", showStandard ? "visible" : "none");
+      map.setLayoutProperty("unclustered-point", "visibility", showStandard ? "visible" : "none");
+
+      map.setLayoutProperty("events-heatmap", "visibility", showAutoHeatmap ? "visible" : "none");
+      map.setLayoutProperty("events-raw-point", "visibility", "none");
+    }
+
     function applyPointFilter() {
-      if (!map.getSource("events")) return;
+      if (!map.getSource("events") || !map.getSource("events-raw")) return;
 
       const filtered = activeCats.size === CATEGORIES.length
         ? allPointsForDay
         : allPointsForDay.filter(f => activeCats.has(featureCategory(f.properties)));
 
       map.getSource("events").setData({ type: "FeatureCollection", features: filtered });
+      map.getSource("events-raw").setData({ type: "FeatureCollection", features: filtered });
       document.getElementById("eventsCount").textContent =
         `Showing ${filtered.length.toLocaleString()} of ${allPointsForDay.length.toLocaleString()} events`;
 
-      const visibility = eventsVisible ? "visible" : "none";
-      for (const id of ["clusters","cluster-count","unclustered-point"]) {
-        map.setLayoutProperty(id, "visibility", visibility);
-      }
+      updateEventLayerVisibility();
     }
 
     // ── Render choropleth + points for a given selection ─────
@@ -950,7 +997,9 @@
 
         if (map.getSource("events")) {
           map.getSource("events").setData({ type: "FeatureCollection", features: [] });
+          map.getSource("events-raw").setData({ type: "FeatureCollection", features: [] });
           document.getElementById("eventsCount").textContent = "Event points not shown in Political Landscape mode";
+          updateEventLayerVisibility();
         }
         currentDayKey = periodKey;
         return;
@@ -982,6 +1031,7 @@
           allPointsForDay = combined;
         }
         applyPointFilter();
+        updateEventLayerVisibility();
       }
     }
 
@@ -1104,6 +1154,11 @@
         clusterRadius: 40
       });
 
+      map.addSource("events-raw", {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] }
+      });
+
       map.addLayer({
         id: "clusters",
         type: "circle",
@@ -1148,6 +1203,56 @@
           "circle-stroke-width": 1,
           "circle-stroke-color": "#fff"
         }
+      });
+
+      map.addLayer({
+        id: "events-heatmap",
+        type: "heatmap",
+        source: "events-raw",
+        maxzoom: HEATMAP_TO_POINTS_ZOOM,
+        paint: {
+          "heatmap-weight": [
+            "interpolate", ["linear"], ["zoom"],
+            0, 0.2,
+            HEATMAP_TO_POINTS_ZOOM, 1
+          ],
+          "heatmap-intensity": [
+            "interpolate", ["linear"], ["zoom"],
+            0, 0.6,
+            HEATMAP_TO_POINTS_ZOOM, 1.2
+          ],
+          "heatmap-color": [
+            "interpolate", ["linear"], ["heatmap-density"],
+            0, "rgba(33,102,172,0)",
+            0.2, "#66c2a5",
+            0.4, "#abdda4",
+            0.6, "#fdae61",
+            0.8, "#f46d43",
+            1, "#d73027"
+          ],
+          "heatmap-radius": [
+            "interpolate", ["linear"], ["zoom"],
+            0, 6,
+            HEATMAP_TO_POINTS_ZOOM, 20
+          ],
+          "heatmap-opacity": 0.9
+        },
+        layout: { visibility: "none" }
+      });
+
+      map.addLayer({
+        id: "events-raw-point",
+        type: "circle",
+        source: "events-raw",
+        minzoom: HEATMAP_TO_POINTS_ZOOM,
+        paint: {
+          "circle-color": "#d73027",
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], HEATMAP_TO_POINTS_ZOOM, 3, 10, 6],
+          "circle-stroke-width": 1,
+          "circle-stroke-color": "#fff",
+          "circle-opacity": 0.9
+        },
+        layout: { visibility: "none" }
       });
 
       // --- Choropleth interactions ---
@@ -1235,6 +1340,10 @@
         await showArticlePanel(e.features);
       });
 
+      map.on("click", "events-raw-point", async e => {
+        await showArticlePanel(e.features);
+      });
+
       map.on("mouseenter", "clusters", () => {
         map.getCanvas().style.cursor = "pointer";
       });
@@ -1246,6 +1355,15 @@
       });
       map.on("mouseleave", "unclustered-point", () => {
         map.getCanvas().style.cursor = "";
+      });
+      map.on("mouseenter", "events-raw-point", () => {
+        map.getCanvas().style.cursor = "pointer";
+      });
+      map.on("mouseleave", "events-raw-point", () => {
+        map.getCanvas().style.cursor = "";
+      });
+      map.on("zoom", () => {
+        if (eventRenderMode === "auto") updateEventLayerVisibility();
       });
 
       // --- Initial render ---
@@ -1297,6 +1415,17 @@
       document.getElementById("showEvents").addEventListener("change", e => {
         eventsVisible = e.target.checked;
         applyPointFilter();
+      });
+
+      document.getElementById("btnRenderStandard").addEventListener("click", () => {
+        eventRenderMode = "standard";
+        setEventRenderButtonState(eventRenderMode);
+        updateEventLayerVisibility();
+      });
+      document.getElementById("btnRenderHybrid").addEventListener("click", () => {
+        eventRenderMode = "auto";
+        setEventRenderButtonState(eventRenderMode);
+        updateEventLayerVisibility();
       });
 
       const allCatIds = CATEGORIES.map(c => c.id);
