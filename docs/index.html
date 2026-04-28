@@ -148,8 +148,20 @@
     }
     #articlePanelTitle { font-weight: 700; font-size: 13px; }
     #articlePanelClose {
-      border: none; background: none; cursor: pointer;
-      font-size: 20px; color: #666; line-height: 1; padding: 0;
+      border: 1px solid #d0d7de;
+      background: #fff;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+      color: #444;
+      line-height: 1;
+      padding: 6px 10px;
+      border-radius: 999px;
+    }
+    #articlePanelClose:hover { background: #f6f8fa; }
+    #articlePanelClose:focus-visible {
+      outline: 2px solid #1f6feb;
+      outline-offset: 2px;
     }
     #articleList { overflow-y: auto; flex: 1; }
     .article-item {
@@ -194,7 +206,7 @@
 
     /* info button */
     #infoBtn {
-      position: absolute; top: 12px; right: 12px;
+      position: absolute; right: 12px; bottom: 25px;
       width: 32px; height: 32px; border-radius: 50%;
       background: rgba(255,255,255,0.97);
       border: 1px solid #ccc;
@@ -308,8 +320,8 @@
       }
 
       #infoBtn {
-        top: 12px;
         right: 12px;
+        bottom: 12px;
         width: 40px; height: 40px;
       }
 
@@ -466,7 +478,7 @@
   <div id="articlePanel">
     <div id="articlePanelHeader">
       <span id="articlePanelTitle">Articles</span>
-      <button id="articlePanelClose">×</button>
+      <button id="articlePanelClose" type="button" aria-label="Close article panel">Close</button>
     </div>
     <div id="articleList"></div>
   </div>
