@@ -100,6 +100,10 @@
     }
     #eventsCount {
       font-size: 11px; color: #555;
+      margin-bottom: 2px;
+    }
+    #summaryCount {
+      font-size: 11px; color: #888;
       margin-bottom: 8px;
     }
 
@@ -147,6 +151,7 @@
       flex-shrink: 0;
     }
     #articlePanelTitle { font-weight: 700; font-size: 13px; }
+    #articlePanelSubtitle { font-size: 11px; color: #999; font-weight: 400; margin-top: 1px; }
     #articlePanelClose {
       border: 1px solid #d0d7de;
       background: #fff;
@@ -376,6 +381,30 @@
       margin-bottom: 4px; outline: none;
     }
     #countrySearch:focus { border-color: #1f6feb; }
+
+    /* ── Keyword search ───────────────────────────────────── */
+    #searchRow { display: flex; gap: 6px; margin-bottom: 6px; }
+    #searchInput {
+      flex: 1; padding: 5px 8px;
+      border: 1px solid #ccc; border-radius: 6px;
+      font-size: 12px; min-width: 0; outline: none;
+    }
+    #searchInput:focus { border-color: #1f6feb; }
+    #searchBtn {
+      border: 1px solid #ccc; background: white;
+      padding: 5px 10px; border-radius: 6px;
+      cursor: pointer; font-size: 12px; white-space: nowrap;
+    }
+    #searchBtn:hover { background: #f0f0f0; }
+    #searchFields { display: flex; gap: 12px; margin-bottom: 6px; }
+    .search-field-label { font-size: 11px; color: #444; cursor: pointer; display: flex; align-items: center; gap: 4px; }
+    #searchMatchRow { display: flex; gap: 6px; margin-bottom: 4px; }
+    .search-match-btn {
+      flex: 1; border: 1px solid #ccc; background: white;
+      padding: 4px 6px; border-radius: 6px; cursor: pointer; font-size: 11px;
+    }
+    .search-match-btn.active { background: #1f6feb; color: white; border-color: #1f6feb; }
+    #searchStatus { font-size: 11px; color: #555; min-height: 14px; margin-bottom: 2px; }
     #countryDropdown {
       background: white; border: 1px solid #ddd; border-radius: 6px;
       max-height: 160px; overflow-y: auto;
@@ -387,6 +416,18 @@
       padding: 5px 10px; cursor: pointer; font-size: 12px;
     }
     .country-opt:hover, .country-opt.kbd-selected { background: #f0f0f0; }
+
+    #searchDropdown {
+      background: white; border: 1px solid #ddd; border-radius: 6px;
+      max-height: 160px; overflow-y: auto;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+      display: none; margin-bottom: 6px;
+    }
+    #searchDropdown.open { display: block; }
+    .search-opt {
+      padding: 5px 10px; cursor: pointer; font-size: 12px;
+    }
+    .search-opt:hover, .search-opt.kbd-selected { background: #f0f0f0; }
 
     /* ── Political sub-mode ───────────────────────────────── */
     #politicalSubMode {
@@ -430,10 +471,28 @@
   <div id="controls">
 
     <!-- Country search -->
+    <div class="section-title">Search country</div>
     <input type="text" id="countrySearch" placeholder="Search country…" autocomplete="off" />
     <div id="countryDropdown"></div>
 
-    <!-- View mode -->
+    <hr class="divider">
+
+    <!-- Keyword search -->
+    <div class="section-title">Search articles</div>
+    <div id="searchRow">
+      <input id="searchInput" type="text" placeholder="Keyword…" autocomplete="off" />
+      <button id="searchBtn" type="button">Search</button>
+    </div>
+    <div id="searchDropdown"></div>
+    <div id="searchFields">
+      <label class="search-field-label"><input type="checkbox" id="searchInTitle" checked> Title</label>
+      <label class="search-field-label"><input type="checkbox" id="searchInSummary" checked> Summary</label>
+    </div>
+    <div id="searchMatchRow">
+      <button class="search-match-btn active" id="btnMatchExact" type="button">Exact word</button>
+      <button class="search-match-btn" id="btnMatchContains" type="button">Contains</button>
+    </div>
+    <div id="searchStatus"></div>
     <div class="section-title">View</div>
     <div id="viewButtons">
       <button id="btnActivity" class="active">News Activity</button>
@@ -474,6 +533,7 @@
       <label for="showEvents">Show events</label>
     </div>
     <div id="eventsCount">Loading…</div>
+    <div id="summaryCount"></div>
 
     <div class="section-title">Filter by category</div>
     <div id="categoryFilters">
@@ -577,9 +637,13 @@
         <li><strong>Country search</strong> — type a country name to fly to it on the map. In
         Political Landscape mode, this also opens the Goldstein time series for that country.</li>
         <li><strong>Most Active</strong> — shows the top 5 countries for the current view and
-        period. In News Activity mode: highest event count. In Goldstein mode: most conflictual
-        (lowest score). In Tone mode: most negative coverage. Click any entry to fly to that
-        country.</li>
+        period. In <em>News Activity</em> mode: ranked by event-mention count. Note that this is
+        not the number of articles or real-world events — GDELT extracts multiple actor–action
+        pairs from each article, and the same event can be covered by many outlets, so one
+        real-world event may produce dozens of records. Countries with a lot of international
+        news coverage will naturally rank higher. In <em>Goldstein</em> mode: most conflictual
+        (lowest average Goldstein score). In <em>Tone</em> mode: most negative media coverage
+        (lowest average tone). Click any entry to fly to that country.</li>
         <li><strong>Media Origins</strong> — shows which countries the news outlets covering the
         current period's events are from, inferred from domain TLDs (e.g. <em>.de</em> → Germany).
         Domains with generic TLDs (.com, .org, .net) are grouped as "US / International" as their
@@ -599,6 +663,7 @@
   <div id="articlePanel">
     <div id="articlePanelHeader">
       <span id="articlePanelTitle">Articles</span>
+      <div id="articlePanelSubtitle"></div>
       <button id="articlePanelClose" type="button" aria-label="Close article panel">Close</button>
     </div>
     <div id="articleList"></div>
@@ -763,6 +828,151 @@
       }
       expr.push("rgba(0,0,0,0)");
       return expr;
+    }
+
+    // ── Keyword search ────────────────────────────────────────
+    const STOP_WORDS = new Set([
+      "a","an","the","and","or","but","in","on","at","to","for",
+      "of","with","by","from","is","was","are","were","be","been",
+      "has","have","had","it","its","as","that","this","into","not",
+      "he","she","they","we","his","her","their","after","over","also"
+    ]);
+
+    function buildWordList() {
+      const words = new Set();
+      const addText = str => {
+        if (!str) return;
+        str.toLowerCase()
+          .split(/[^a-z\u00C0-\u024F']+/)
+          .filter(w => w.length >= 3 && !STOP_WORDS.has(w))
+          .forEach(w => words.add(w));
+      };
+      // words from currently loaded point titles
+      for (const f of allPointsForDay) {
+        addText(f.properties?.title);
+      }
+      // words from any already-cached summaries
+      for (const idx of Object.values(summaryIndexCache)) {
+        for (const entry of Object.values(idx)) {
+          addText(entry.title);
+          addText(entry.summary);
+        }
+      }
+      return words;
+    }
+
+    function setupKeywordSearch() {
+      const input    = document.getElementById("searchInput");
+      const dropdown = document.getElementById("searchDropdown");
+      let suggestions = [];
+      let kbdIdx = -1;
+
+      function renderSuggestions(q) {
+        kbdIdx = -1;
+        dropdown.innerHTML = "";
+        if (!q || q.length < 2) { dropdown.classList.remove("open"); return; }
+        const words = buildWordList();
+        suggestions = [...words]
+          .filter(w => w.startsWith(q))
+          .sort((a, b) => a.localeCompare(b))
+          .slice(0, 8);
+        if (!suggestions.length) { dropdown.classList.remove("open"); return; }
+        suggestions.forEach(word => {
+          const div = document.createElement("div");
+          div.className = "search-opt";
+          div.textContent = word;
+          div.addEventListener("mousedown", e => {
+            e.preventDefault(); // prevent input blur before click registers
+            input.value = word;
+            dropdown.classList.remove("open");
+          });
+          dropdown.appendChild(div);
+        });
+        dropdown.classList.add("open");
+      }
+
+      input.addEventListener("input", e => renderSuggestions(e.target.value.trim().toLowerCase()));
+
+      input.addEventListener("keydown", e => {
+        const opts = dropdown.querySelectorAll(".search-opt");
+        if (e.key === "ArrowDown") {
+          kbdIdx = Math.min(kbdIdx + 1, opts.length - 1);
+          opts.forEach((o, i) => o.classList.toggle("kbd-selected", i === kbdIdx));
+          e.preventDefault();
+        } else if (e.key === "ArrowUp") {
+          kbdIdx = Math.max(kbdIdx - 1, 0);
+          opts.forEach((o, i) => o.classList.toggle("kbd-selected", i === kbdIdx));
+          e.preventDefault();
+        } else if (e.key === "Enter" && kbdIdx >= 0 && suggestions[kbdIdx]) {
+          input.value = suggestions[kbdIdx];
+          dropdown.classList.remove("open");
+          // don't call searchArticles here — the existing Enter listener handles it
+        } else if (e.key === "Escape") {
+          dropdown.classList.remove("open");
+        }
+      });
+
+      input.addEventListener("blur", () => {
+        // small delay so mousedown on an option fires first
+        setTimeout(() => dropdown.classList.remove("open"), 150);
+      });
+    }
+
+    async function searchArticles() {
+      const query = document.getElementById("searchInput").value.trim().toLowerCase();
+      const statusEl = document.getElementById("searchStatus");
+      if (!query) { statusEl.textContent = ""; closeArticlePanel(); return; }
+
+      statusEl.textContent = "Searching…";
+
+      const slider = document.getElementById("daySlider");
+      const periodKey = availablePeriods[Number(slider.value)];
+      if (!periodKey) { statusEl.textContent = "No data loaded."; return; }
+
+      const dayKeys = currentMode === "daily"
+        ? [periodKey]
+        : availableDays.filter(d =>
+            currentMode === "weekly" ? getWeekKey(d) === periodKey : getMonthKey(d) === periodKey
+          );
+
+      const indexes = await Promise.all(dayKeys.map(loadSummaryIndex));
+      const merged = Object.assign({}, ...indexes);
+
+      const matches = allPointsForDay
+        .map(f => {
+          const props = f.properties || {};
+          const extra = merged[props.url] || {};
+          return { ...f, properties: { ...props, ...extra } };
+        })
+        .filter(f => {
+          const p = f.properties;
+          if (!p.title || p.title === "No title found") return false;
+          const inTitle   = document.getElementById("searchInTitle").checked;
+          const inSummary = document.getElementById("searchInSummary").checked;
+          if (!inTitle && !inSummary) return false;
+          const exactMode = document.getElementById("btnMatchExact").classList.contains("active");
+          const test = exactMode
+            ? str => new RegExp(`(?<![\\w\u00C0-\u024F])(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})(?![\\w\u00C0-\u024F])`, "i").test(str)
+            : str => str.toLowerCase().includes(query);
+          return (inTitle   && test(p.title   || "")) ||
+                 (inSummary && test(p.summary  || ""));
+        });
+
+      if (matches.length === 0) {
+        statusEl.textContent = `No results for “${query}”.`;
+        document.getElementById("articlePanel").classList.remove("visible");
+        document.getElementById("infoBtn").style.display = "";
+        return;
+      }
+
+      statusEl.textContent = `${matches.length} result${matches.length !== 1 ? "s" : ""} for “${query}”`;
+      document.getElementById("articlePanelTitle").textContent =
+        `${matches.length} result${matches.length !== 1 ? "s" : ""}: “${query}”`;
+      document.getElementById("articlePanelSubtitle").textContent = "";
+      document.getElementById("articleList").innerHTML =
+        matches.map(f => renderArticleItem(f.properties)).join("");
+      document.getElementById("articlePanel").classList.add("visible");
+      document.getElementById("infoBtn").style.display = "none";
     }
 
     // ── Country name lookup ──────────────────────────────────
@@ -1149,10 +1359,21 @@
       });
 
       const n = features.length;
+      const withSummary = enriched.filter(f => f.properties.title && f.properties.title !== "No title found").length;
+      const pct = n > 0 ? Math.round(withSummary / n * 100) : 0;
       document.getElementById("articlePanelTitle").textContent =
         `${n} article${n !== 1 ? "s" : ""}`;
+      document.getElementById("articlePanelSubtitle").textContent =
+        `${withSummary} of ${n} summarized (${pct}%)`;
+      document.getElementById("articlePanelSubtitle").textContent =
+        `${withSummary} of ${n} summarized (${pct}%)`;
+      const sorted = [...enriched].sort((a, b) => {
+        const aNoTitle = !a.properties.title || a.properties.title === "No title found";
+        const bNoTitle = !b.properties.title || b.properties.title === "No title found";
+        return aNoTitle - bNoTitle;
+      });
       document.getElementById("articleList").innerHTML =
-        enriched.map(f => renderArticleItem(f.properties)).join("");
+        sorted.map(f => renderArticleItem(f.properties)).join("");
       document.getElementById("articlePanel").classList.add("visible");
       document.getElementById("infoBtn").style.display = "none";
       popup.remove();
@@ -1430,6 +1651,21 @@
       document.getElementById("eventsCount").textContent =
         `Showing ${filtered.length.toLocaleString()} of ${allPointsForDay.length.toLocaleString()} events`;
 
+      // Show summarization coverage from cached summary indexes
+      const cachedMerged = Object.assign({}, ...Object.values(summaryIndexCache));
+      if (Object.keys(cachedMerged).length > 0) {
+        const total = filtered.length;
+        const summarized = filtered.filter(f => {
+          const e = cachedMerged[f.properties.url];
+          return e && e.title && e.title !== "No title found";
+        }).length;
+        const pct = total > 0 ? Math.round(summarized / total * 100) : 0;
+        document.getElementById("summaryCount").textContent =
+          `${summarized.toLocaleString()} of ${total.toLocaleString()} summarized (${pct}%)`;
+      } else {
+        document.getElementById("summaryCount").textContent = "";
+      }
+
       updateEventLayerVisibility();
     }
 
@@ -1508,6 +1744,15 @@
         }
         applyPointFilter();
         updateEventLayerVisibility();
+        renderMediaOrigins();
+
+        // Load summary index in background to populate summarization %
+        const dayKeys = currentMode === "daily"
+          ? [periodKey]
+          : availableDays.filter(d =>
+              currentMode === "weekly" ? getWeekKey(d) === periodKey : getMonthKey(d) === periodKey
+            );
+        Promise.all(dayKeys.map(loadSummaryIndex)).then(() => applyPointFilter());
       }
     }
 
@@ -1856,6 +2101,26 @@
 
       // --- Country search setup ---
       setupCountrySearch();
+      setupKeywordSearch();
+
+      document.getElementById("searchBtn").addEventListener("click", searchArticles);
+      document.getElementById("searchInput").addEventListener("keydown", e => {
+        if (e.key === "Enter") searchArticles();
+      });
+
+      let searchDebounceTimer = null;
+      document.getElementById("searchInput").addEventListener("input", () => {
+        clearTimeout(searchDebounceTimer);
+        searchDebounceTimer = setTimeout(searchArticles, 300);
+      });
+      document.getElementById("btnMatchExact").addEventListener("click", () => {
+        document.getElementById("btnMatchExact").classList.add("active");
+        document.getElementById("btnMatchContains").classList.remove("active");
+      });
+      document.getElementById("btnMatchContains").addEventListener("click", () => {
+        document.getElementById("btnMatchContains").classList.add("active");
+        document.getElementById("btnMatchExact").classList.remove("active");
+      });
       map.once("idle", () => {
         buildCountryList();
         renderMostActive();
