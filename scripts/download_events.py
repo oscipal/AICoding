@@ -328,6 +328,11 @@ def process_day(day_key, urls, force=False, summary_limit=None):
         cfg.request_timeout = SUMMARY_REQUEST_TIMEOUT_SEC
         cfg.fetch_images = False
 
+        cfg.browser_user_agent = (
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/124.0.0.0 Safari/537.36"
+        )
         last_exc = None
         for _ in range(2):
             try:
@@ -469,7 +474,13 @@ def extract_title_and_summary(url, num_sentences=3):
     Returns (title, summary). If extraction fails, returns error messages.
     """
     try:
-        article = Article(url)
+        article = Article(url, headers={
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                          "AppleWebKit/537.36 (KHTML, like Gecko) "
+                          "Chrome/124.0.0.0 Safari/537.36",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        })
         article.download()
         article.parse()
         text = article.text
