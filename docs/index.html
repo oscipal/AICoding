@@ -1063,12 +1063,26 @@
       });
     }
 
+    async function showArticlesForCountry(iso3, name) {
+      if (!allPointsForDay.length) return;
+      const lowerName = name.toLowerCase();
+      const matches = allPointsForDay.filter(f => {
+        const loc = (f.properties?.location || "").toLowerCase();
+        return loc === lowerName || loc.endsWith(", " + lowerName);
+      });
+      if (!matches.length) return;
+      await showArticlePanel(matches);
+      document.getElementById("articlePanelTitle").textContent =
+        `${matches.length} article${matches.length !== 1 ? "s" : ""} — ${name}`;
+    }
+
     function selectCountry(iso3, name) {
       document.getElementById("countrySearch").value = name;
       document.getElementById("countryDropdown").classList.remove("open");
       buildCountryList(); // ensure tiles are sampled before flying
       flyToCountry(iso3);
       if (viewMode === "political" && goldsteinByIso[iso3]) showTimeSeries(iso3, name);
+      else if (viewMode === "activity") showArticlesForCountry(iso3, name);
     }
 
     // ── Most Active ──────────────────────────────────────────
