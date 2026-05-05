@@ -2060,7 +2060,7 @@
         clusterClickTimer = setTimeout(async () => {
           clusterClickTimer = null;
           try {
-            const leaves = await clusterLeaves(map.getSource("events"), clusterId, 100);
+            const leaves = await clusterLeaves(map.getSource("events"), clusterId, Infinity);
             await showArticlePanel(leaves);
           } catch(err) { console.error("clusterLeaves error:", err); }
         }, 250);
@@ -2130,11 +2130,15 @@
       document.getElementById("btnMatchExact").addEventListener("click", () => {
         document.getElementById("btnMatchExact").classList.add("active");
         document.getElementById("btnMatchContains").classList.remove("active");
+        searchArticles();
       });
       document.getElementById("btnMatchContains").addEventListener("click", () => {
         document.getElementById("btnMatchContains").classList.add("active");
         document.getElementById("btnMatchExact").classList.remove("active");
+        searchArticles();
       });
+      document.getElementById("searchInTitle").addEventListener("change", searchArticles);
+      document.getElementById("searchInSummary").addEventListener("change", searchArticles);
       map.once("idle", () => {
         buildCountryList();
         renderMostActive();
