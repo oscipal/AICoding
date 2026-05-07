@@ -67,6 +67,12 @@ nltk.download('punkt_tab')
 
 import requests
 import yaml
+from newspaper import Article
+from newspaper import Config as NewsConfig
+from sumy.parsers.plaintext import PlaintextParser
+from sumy.nlp.tokenizers import Tokenizer
+from sumy.summarizers.lex_rank import LexRankSummarizer
+from sumy.summarizers.lsa import LsaSummarizer
 
 # ── Configuration ────────────────────────────────────────────────────────────
 _cfg_path = Path(__file__).parent.parent / "configs/config.yml"
@@ -271,6 +277,54 @@ def process_zip(url, session, seen_ids, seen_urls):
     return features, gs_rows
 
 
+# ── Article summarization ────────────────────────────────────────────────────
+def sumy_summarize(text, num_sentences=3):
+    parser = PlaintextParser.from_string(text, Tokenizer("english"))
+    # LexRank occasionally emits RuntimeWarning on degenerate inputs.
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            category=RuntimeWarning,
+            module=r"sumy\.summarizers\.lex_rank",
+        )
+        summary = LexRankSummarizer()(parser.document, num_sentences)
+    text_out = ' '.join(str(sentence) for sentence in summary).strip()
+    if text_out:
+        return text_out
+
+    # Fallback keeps summaries available when LexRank yields nothing useful.
+    summary = LsaSummarizer()(parser.document, num_sentences)
+    return ' '.join(str(sentence) for sentence in summary)
+
+
+def extract_title_and_summary(url, num_sentences=3):
+    cfg = NewsConfig()
+    cfg.request_timeout = SUMMARY_REQUEST_TIMEOUT_SEC
+    cfg.fetch_images = False
+    cfg.browser_user_agent = (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/124.0.0.0 Safari/537.36"
+    )
+    last_exc = None
+    for _ in range(2):
+        try:
+            article = Article(url, config=cfg)
+            article.download()
+            article.parse()
+            text = article.text
+            title = article.title
+            if not text or len(text.strip()) < 100:
+                summary = "Article text extraction failed or was too short."
+            else:
+                summary = sumy_summarize(text, num_sentences=num_sentences)
+            return title, summary
+        except Exception as exc:
+            last_exc = exc
+
+    return "Failed to extract title", f"Failed to summarize: {last_exc}"
+
+
 # ── Process one day ───────────────────────────────────────────────────────────
 def process_day(day_key, urls, force=False, summary_limit=None):
     out_path = GEOJSON_DIR / f"{day_key}.geojson"
@@ -298,59 +352,6 @@ def process_day(day_key, urls, force=False, summary_limit=None):
 
 
     # ── Summarize articles and attach to features ─────────────────────────────
-    from newspaper import Article
-    from newspaper import Config as NewsConfig
-    from sumy.parsers.plaintext import PlaintextParser
-    from sumy.nlp.tokenizers import Tokenizer
-    from sumy.summarizers.lex_rank import LexRankSummarizer
-    from sumy.summarizers.lsa import LsaSummarizer
-
-    def sumy_summarize(text, num_sentences=3):
-        parser = PlaintextParser.from_string(text, Tokenizer("english"))
-        # LexRank occasionally emits RuntimeWarning on degenerate inputs.
-        with warnings.catch_warnings():
-            warnings.filterwarnings(
-                "ignore",
-                category=RuntimeWarning,
-                module=r"sumy\.summarizers\.lex_rank",
-            )
-            summary = LexRankSummarizer()(parser.document, num_sentences)
-        text_out = ' '.join(str(sentence) for sentence in summary).strip()
-        if text_out:
-            return text_out
-
-        # Fallback keeps summaries available when LexRank yields nothing useful.
-        summary = LsaSummarizer()(parser.document, num_sentences)
-        return ' '.join(str(sentence) for sentence in summary)
-
-    def extract_title_and_summary(url, num_sentences=3):
-        cfg = NewsConfig()
-        cfg.request_timeout = SUMMARY_REQUEST_TIMEOUT_SEC
-        cfg.fetch_images = False
-
-        cfg.browser_user_agent = (
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/124.0.0.0 Safari/537.36"
-        )
-        last_exc = None
-        for _ in range(2):
-            try:
-                article = Article(url, config=cfg)
-                article.download()
-                article.parse()
-                text = article.text
-                title = article.title
-                if not text or len(text.strip()) < 100:
-                    summary = "Article text extraction failed or was too short."
-                else:
-                    summary = sumy_summarize(text, num_sentences=num_sentences)
-                return title, summary
-            except Exception as exc:
-                last_exc = exc
-
-        return "Failed to extract title", f"Failed to summarize: {last_exc}"
-
     def summarize_feature(idx_feature):
         idx, feature = idx_feature
         url = feature["properties"].get("url", "")

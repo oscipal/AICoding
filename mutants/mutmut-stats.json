@@ -1,0 +1,110 @@
+{
+    "tests_by_mangled_function_name": {
+        "scripts.download_events.x_extract_domain": [
+            "tests/test_process_zip.py::test_duplicate_event_id_produces_one_gs_row",
+            "tests/test_helpers.py::test_extract_domain_no_scheme",
+            "tests/test_process_zip.py::test_actor_without_valid_country_code_excluded_from_gs",
+            "tests/test_process_zip.py::test_feature_has_correct_coordinates",
+            "tests/test_helpers.py::test_extract_domain_empty_string",
+            "tests/test_helpers.py::test_extract_domain_subdomain",
+            "tests/test_process_zip.py::test_duplicate_url_produces_one_feature",
+            "tests/test_helpers.py::test_extract_domain_strips_www",
+            "tests/test_process_zip.py::test_feature_has_correct_properties",
+            "tests/test_process_zip.py::test_unique_urls_produce_multiple_features",
+            "tests/test_process_zip.py::test_gs_row_contains_correct_values",
+            "tests/test_process_zip.py::test_geo_type_at_minimum_included",
+            "tests/test_process_zip.py::test_invalid_goldstein_value_excluded_from_gs",
+            "tests/test_process_zip.py::test_valid_row_produces_one_feature",
+            "tests/test_helpers.py::test_extract_domain_without_www",
+            "tests/test_process_zip.py::test_unknown_cameo_code_defaults_to_diplomacy"
+        ],
+        "scripts.download_events.x_parse_date": [
+            "tests/test_helpers.py::test_parse_date_basic",
+            "tests/test_helpers.py::test_parse_date_end_of_year",
+            "tests/test_helpers.py::test_parse_date_january"
+        ],
+        "scripts.download_events.x_date_range": [
+            "tests/test_helpers.py::test_date_range_end_before_start_is_empty",
+            "tests/test_helpers.py::test_date_range_multiple_days",
+            "tests/test_helpers.py::test_date_range_single_day"
+        ],
+        "scripts.download_events.x_day_prefix": [
+            "tests/test_helpers.py::test_day_prefix_basic",
+            "tests/test_helpers.py::test_day_prefix_zero_padded"
+        ],
+        "scripts.download_events.x_process_zip": [
+            "tests/test_process_zip.py::test_duplicate_event_id_produces_one_gs_row",
+            "tests/test_process_zip.py::test_invalid_lat_lon_excluded",
+            "tests/test_process_zip.py::test_actor_without_valid_country_code_excluded_from_gs",
+            "tests/test_process_zip.py::test_zero_coordinates_excluded",
+            "tests/test_process_zip.py::test_feature_has_correct_coordinates",
+            "tests/test_process_zip.py::test_geo_type_below_minimum_excluded",
+            "tests/test_process_zip.py::test_empty_zip_returns_empty",
+            "tests/test_process_zip.py::test_duplicate_url_produces_one_feature",
+            "tests/test_process_zip.py::test_short_row_skipped",
+            "tests/test_process_zip.py::test_feature_has_correct_properties",
+            "tests/test_process_zip.py::test_unique_urls_produce_multiple_features",
+            "tests/test_process_zip.py::test_gs_row_contains_correct_values",
+            "tests/test_process_zip.py::test_out_of_range_lon_excluded",
+            "tests/test_process_zip.py::test_geo_type_at_minimum_included",
+            "tests/test_process_zip.py::test_invalid_goldstein_value_excluded_from_gs",
+            "tests/test_process_zip.py::test_valid_row_produces_one_feature",
+            "tests/test_process_zip.py::test_out_of_range_lat_excluded",
+            "tests/test_process_zip.py::test_unknown_cameo_code_defaults_to_diplomacy"
+        ],
+        "scripts.download_events.x_sumy_summarize": [
+            "tests/test_summary.py::test_extract_first_attempt_fails_second_succeeds",
+            "tests/test_summary.py::test_sumy_summarize_fewer_sentences_than_requested",
+            "tests/test_summary.py::test_extract_returns_title_and_summary",
+            "tests/test_summary.py::test_sumy_summarize_sentences_come_from_input",
+            "tests/test_summary.py::test_sumy_summarize_returns_string"
+        ],
+        "scripts.download_events.x_extract_title_and_summary": [
+            "tests/test_summary.py::test_extract_returns_title_and_summary",
+            "tests/test_summary.py::test_extract_both_retries_fail_returns_fallback",
+            "tests/test_summary.py::test_extract_short_text_returns_fallback_summary",
+            "tests/test_summary.py::test_extract_first_attempt_fails_second_succeeds"
+        ]
+    },
+    "duration_by_test": {
+        "tests/test_helpers.py::test_extract_domain_strips_www": 8.670899999962955e-05,
+        "tests/test_helpers.py::test_extract_domain_without_www": 7.370800000039424e-05,
+        "tests/test_helpers.py::test_extract_domain_empty_string": 6.954100000022834e-05,
+        "tests/test_helpers.py::test_extract_domain_no_scheme": 7.199999999940587e-05,
+        "tests/test_helpers.py::test_extract_domain_subdomain": 7.154200000059063e-05,
+        "tests/test_helpers.py::test_parse_date_basic": 6.95000000003887e-05,
+        "tests/test_helpers.py::test_parse_date_january": 7.025000000027148e-05,
+        "tests/test_helpers.py::test_parse_date_end_of_year": 6.937500000070429e-05,
+        "tests/test_helpers.py::test_date_range_single_day": 7.183299999979909e-05,
+        "tests/test_helpers.py::test_date_range_multiple_days": 6.675000000022635e-05,
+        "tests/test_helpers.py::test_date_range_end_before_start_is_empty": 7.187499999972147e-05,
+        "tests/test_helpers.py::test_day_prefix_basic": 6.741700000034712e-05,
+        "tests/test_helpers.py::test_day_prefix_zero_padded": 0.00013079100000013,
+        "tests/test_process_zip.py::test_valid_row_produces_one_feature": 8.941599999978678e-05,
+        "tests/test_process_zip.py::test_feature_has_correct_coordinates": 7.741699999996854e-05,
+        "tests/test_process_zip.py::test_feature_has_correct_properties": 7.587500000028058e-05,
+        "tests/test_process_zip.py::test_unknown_cameo_code_defaults_to_diplomacy": 7.520800000015981e-05,
+        "tests/test_process_zip.py::test_duplicate_event_id_produces_one_gs_row": 7.604099999980463e-05,
+        "tests/test_process_zip.py::test_duplicate_url_produces_one_feature": 7.670800000170175e-05,
+        "tests/test_process_zip.py::test_unique_urls_produce_multiple_features": 7.316700000004062e-05,
+        "tests/test_process_zip.py::test_geo_type_below_minimum_excluded": 7.37909999983799e-05,
+        "tests/test_process_zip.py::test_geo_type_at_minimum_included": 7.412499999936983e-05,
+        "tests/test_process_zip.py::test_zero_coordinates_excluded": 7.395899999984579e-05,
+        "tests/test_process_zip.py::test_invalid_lat_lon_excluded": 7.433300000059262e-05,
+        "tests/test_process_zip.py::test_out_of_range_lat_excluded": 7.262499999960426e-05,
+        "tests/test_process_zip.py::test_out_of_range_lon_excluded": 7.33750000012634e-05,
+        "tests/test_process_zip.py::test_gs_row_contains_correct_values": 7.445800000027702e-05,
+        "tests/test_process_zip.py::test_actor_without_valid_country_code_excluded_from_gs": 7.583400000044094e-05,
+        "tests/test_process_zip.py::test_invalid_goldstein_value_excluded_from_gs": 7.316700000004062e-05,
+        "tests/test_process_zip.py::test_short_row_skipped": 7.470799999964584e-05,
+        "tests/test_process_zip.py::test_empty_zip_returns_empty": 7.404200000138417e-05,
+        "tests/test_summary.py::test_sumy_summarize_returns_string": 0.00013408400000081144,
+        "tests/test_summary.py::test_sumy_summarize_sentences_come_from_input": 8.99170000003835e-05,
+        "tests/test_summary.py::test_sumy_summarize_fewer_sentences_than_requested": 9.170799999935753e-05,
+        "tests/test_summary.py::test_extract_returns_title_and_summary": 9.391700000094261e-05,
+        "tests/test_summary.py::test_extract_short_text_returns_fallback_summary": 7.999999999874774e-05,
+        "tests/test_summary.py::test_extract_both_retries_fail_returns_fallback": 7.945899999839412e-05,
+        "tests/test_summary.py::test_extract_first_attempt_fails_second_succeeds": 9.129200000046467e-05
+    },
+    "stats_time": 3.703161
+}
