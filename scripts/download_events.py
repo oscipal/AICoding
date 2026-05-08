@@ -65,7 +65,11 @@ import nltk
 nltk.download('punkt')
 nltk.download('punkt_tab')
 
+import random
+import time
+
 import requests
+import trafilatura
 import yaml
 from newspaper import Article
 from newspaper import Config as NewsConfig
@@ -278,6 +282,29 @@ def process_zip(url, session, seen_ids, seen_urls):
 
 
 # ── Article summarization ────────────────────────────────────────────────────
+
+# Pool of user-agent strings rotated per request to reduce bot detection.
+_USER_AGENTS = [
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_4) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:125.0) Gecko/20100101 Firefox/125.0",
+]
+
+# Domains that consistently block scrapers — skip them immediately to save time.
+_BLOCKED_DOMAINS: set[str] = set()
+_DOMAIN_FAIL_COUNTS: dict[str, int] = {}
+_DOMAIN_FAIL_THRESHOLD = 5  # mark domain as blocked after this many failures
+
+
+def _domain(url: str) -> str:
+    try:
+        return urlparse(url).netloc.lstrip("www.")
+    except Exception:
+        return ""
+
+
 def sumy_summarize(text, num_sentences=3):
     parser = PlaintextParser.from_string(text, Tokenizer("english"))
     # LexRank occasionally emits RuntimeWarning on degenerate inputs.
@@ -297,32 +324,74 @@ def sumy_summarize(text, num_sentences=3):
     return ' '.join(str(sentence) for sentence in summary)
 
 
+def _try_trafilatura(url: str, num_sentences: int = 3):
+    """Attempt extraction via trafilatura. Returns (title, summary) or raises."""
+    html = trafilatura.fetch_url(url)
+    if not html:
+        raise ValueError("trafilatura: empty response")
+    text = trafilatura.extract(html, include_comments=False, include_tables=False)
+    if not text or len(text.strip()) < 100:
+        raise ValueError("trafilatura: extracted text too short")
+    metadata = trafilatura.extract_metadata(html)
+    title = (metadata.title if metadata and metadata.title else "").strip() or None
+    summary = sumy_summarize(text, num_sentences=num_sentences)
+    return title, summary
+
+
 def extract_title_and_summary(url, num_sentences=3):
-    cfg = NewsConfig()
-    cfg.request_timeout = SUMMARY_REQUEST_TIMEOUT_SEC
-    cfg.fetch_images = False
-    cfg.browser_user_agent = (
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/124.0.0.0 Safari/537.36"
-    )
+    domain = _domain(url)
+
+    # Skip domains known to block all scrapers.
+    if domain in _BLOCKED_DOMAINS:
+        return "Failed to extract title", f"Failed to summarize: domain {domain!r} is blocked"
+
     last_exc = None
-    for _ in range(2):
+    for attempt in range(3):
+        if attempt > 0:
+            time.sleep(1.5 * attempt)  # back-off: 1.5s, 3s
+
+        # ── newspaper3k attempt ──────────────────────────────────────────────
         try:
+            cfg = NewsConfig()
+            cfg.request_timeout = SUMMARY_REQUEST_TIMEOUT_SEC
+            cfg.fetch_images = False
+            cfg.browser_user_agent = random.choice(_USER_AGENTS)
             article = Article(url, config=cfg)
             article.download()
             article.parse()
             text = article.text
-            title = article.title
-            if not text or len(text.strip()) < 100:
-                summary = "Article text extraction failed or was too short."
-            else:
+            title = (article.title or "").strip() or None
+            if text and len(text.strip()) >= 100:
                 summary = sumy_summarize(text, num_sentences=num_sentences)
-            return title, summary
+                _domain_success(domain)
+                return title or "Failed to extract title", summary
+            # text too short — fall through to trafilatura
         except Exception as exc:
             last_exc = exc
 
+        # ── trafilatura fallback ─────────────────────────────────────────────
+        try:
+            title_t, summary_t = _try_trafilatura(url, num_sentences)
+            _domain_success(domain)
+            return title_t or "Failed to extract title", summary_t
+        except Exception as exc:
+            last_exc = exc
+
+    _domain_fail(domain)
     return "Failed to extract title", f"Failed to summarize: {last_exc}"
+
+
+def _domain_fail(domain: str) -> None:
+    if not domain:
+        return
+    _DOMAIN_FAIL_COUNTS[domain] = _DOMAIN_FAIL_COUNTS.get(domain, 0) + 1
+    if _DOMAIN_FAIL_COUNTS[domain] >= _DOMAIN_FAIL_THRESHOLD:
+        _BLOCKED_DOMAINS.add(domain)
+
+
+def _domain_success(domain: str) -> None:
+    _DOMAIN_FAIL_COUNTS.pop(domain, None)
+    _BLOCKED_DOMAINS.discard(domain)
 
 
 # ── Process one day ───────────────────────────────────────────────────────────
