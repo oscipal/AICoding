@@ -1372,19 +1372,21 @@
         return { ...f, properties: { ...props, ...extra } };
       });
 
+      const isBadTitle = t => !t || t === "No title found" || t === "Failed to extract title";
+      const isBadSummary = s => !s || s === "No summary found" || s.startsWith("Failed to summarize");
+      const isSummarized = p => !isBadTitle(p.title) && !isBadSummary(p.summary);
+
       const n = features.length;
-      const withSummary = enriched.filter(f => f.properties.title && f.properties.title !== "No title found").length;
+      const withSummary = enriched.filter(f => isSummarized(f.properties)).length;
       const pct = n > 0 ? Math.round(withSummary / n * 100) : 0;
       document.getElementById("articlePanelTitle").textContent =
         `${n} article${n !== 1 ? "s" : ""}`;
       document.getElementById("articlePanelSubtitle").textContent =
         `${withSummary} of ${n} summarized (${pct}%)`;
-      document.getElementById("articlePanelSubtitle").textContent =
-        `${withSummary} of ${n} summarized (${pct}%)`;
       const sorted = [...enriched].sort((a, b) => {
-        const aNoTitle = !a.properties.title || a.properties.title === "No title found";
-        const bNoTitle = !b.properties.title || b.properties.title === "No title found";
-        return aNoTitle - bNoTitle;
+        const aUnsummarized = !isSummarized(a.properties);
+        const bUnsummarized = !isSummarized(b.properties);
+        return aUnsummarized - bUnsummarized;
       });
       document.getElementById("articleList").innerHTML =
         sorted.map(f => renderArticleItem(f.properties)).join("");
@@ -1671,7 +1673,10 @@
         const total = filtered.length;
         const summarized = filtered.filter(f => {
           const e = cachedMerged[f.properties.url];
-          return e && e.title && e.title !== "No title found";
+          if (!e) return false;
+          const badTitle = !e.title || e.title === "No title found" || e.title === "Failed to extract title";
+          const badSummary = !e.summary || e.summary === "No summary found" || e.summary.startsWith("Failed to summarize");
+          return !badTitle && !badSummary;
         }).length;
         const pct = total > 0 ? Math.round(summarized / total * 100) : 0;
         document.getElementById("summaryCount").textContent =
