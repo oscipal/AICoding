@@ -17,6 +17,7 @@ let viewMode         = "activity";
 let politicalSubMode = "goldstein";
 let currentMode      = "daily";
 let countryNameMap   = {};
+let countryBoundsMap = {};
 let currentDayKey    = "";
 let availableDays    = [];
 let availablePeriods = [];
@@ -118,7 +119,20 @@ function makeGoldsteinLookup(rows) {
 
 // ── Date helpers ─────────────────────────────────────────────────
 function formatDayLabel(dayKey) {
-  return `${dayKey.slice(0,4)}-${dayKey.slice(4,6)}-${dayKey.slice(6,8)}`;
+  const d = new Date(Date.UTC(+dayKey.slice(0,4), +dayKey.slice(4,6)-1, +dayKey.slice(6,8)));
+  return d.toLocaleDateString("en-US", { year:"numeric", month:"long", day:"numeric", timeZone:"UTC" });
+}
+function formatPeriodLabel(mode, periodKey) {
+  if (mode === "daily")   return formatDayLabel(periodKey);
+  if (mode === "weekly") {
+    const wk = periodKey.slice(-2).replace(/^0/, "");
+    return `Week ${wk} · ${periodKey.slice(0,4)}`;
+  }
+  if (mode === "monthly") {
+    const d = new Date(Date.UTC(+periodKey.slice(0,4), +periodKey.slice(5,7)-1, 1));
+    return d.toLocaleDateString("en-US", { year:"numeric", month:"long", timeZone:"UTC" });
+  }
+  return periodKey;
 }
 function getMonthKey(d) { return `${d.slice(0,4)}-${d.slice(4,6)}`; }
 function getWeekKey(d) {

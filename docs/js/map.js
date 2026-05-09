@@ -87,15 +87,10 @@ async function renderSelectionByIndex(index) {
     let fillExpression, label;
     if (politicalSubMode === "tone") {
       fillExpression = buildToneExpression(gsData);
-      label = currentMode === "daily"
-        ? `Tone: ${formatDayLabel(periodKey)}`
-        : `Tone ${currentMode.charAt(0).toUpperCase() + currentMode.slice(1)}: ${periodKey}`;
     } else {
       fillExpression = buildGoldsteinExpression(gsData);
-      label = currentMode === "daily"
-        ? `Goldstein: ${formatDayLabel(periodKey)}`
-        : `Goldstein ${currentMode.charAt(0).toUpperCase() + currentMode.slice(1)}: ${periodKey}`;
     }
+    label = formatPeriodLabel(currentMode, periodKey);
     document.getElementById("dateLabel").textContent = label;
     map.setPaintProperty("country-fills", "fill-color", fillExpression);
 
@@ -113,9 +108,7 @@ async function renderSelectionByIndex(index) {
 
   // Activity mode
   const rows  = await getRowsForSelection(currentMode, periodKey);
-  const label = currentMode === "daily"
-    ? `Daily: ${formatDayLabel(periodKey)}`
-    : `${currentMode.charAt(0).toUpperCase() + currentMode.slice(1)}: ${periodKey}`;
+  const label = formatPeriodLabel(currentMode, periodKey);
 
   renderChoropleth(rows, label);
 
@@ -315,20 +308,20 @@ map.on("load", async () => {
     const props = e.features[0].properties;
     const iso3  = props.iso_3166_1_alpha_3;
     const name  = props.name_en || iso3;
+
+    // Cache bounds from the clicked feature geometry
+    const geo = e.features[0].geometry;
+    const b   = countryBoundsMap[iso3] || new mapboxgl.LngLatBounds();
+    (geo.type === "Polygon" ? [geo.coordinates] : geo.coordinates)
+      .forEach(poly => poly[0].forEach(c => b.extend(c)));
+    countryBoundsMap[iso3] = b;
+
     if (viewMode === "political") {
-      const geo = e.features[0].geometry;
-      const b   = new mapboxgl.LngLatBounds();
-      (geo.type === "Polygon" ? [geo.coordinates] : geo.coordinates)
-        .forEach(poly => poly[0].forEach(c => b.extend(c)));
       tsCountryBounds = b;
       showTimeSeries(iso3, name);
       return;
     }
-    const geo    = e.features[0].geometry;
-    const bounds = new mapboxgl.LngLatBounds();
-    (geo.type === "Polygon" ? [geo.coordinates] : geo.coordinates)
-      .forEach(poly => poly[0].forEach(c => bounds.extend(c)));
-    map.fitBounds(bounds, { padding: 40, maxZoom: 5, duration: 1000 });
+    map.fitBounds(b, { padding: 40, maxZoom: 5, duration: 1000 });
   });
 
   map.on("mousemove", "country-fills", e => {
@@ -389,7 +382,7 @@ map.on("load", async () => {
   await switchMode("daily");
   setupCountrySearch();
   setupKeywordSearch();
-  setupAccordion();
+  setupViewSelector();
 
   map.once("idle", () => { buildCountryList(); renderMostActive(); });
   map.on("moveend", buildCountryList);

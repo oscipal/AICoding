@@ -83,50 +83,39 @@ html, body {
   min-height: 14px;
 }
 
-/* ── Accordion ───────────────────────────────────────────────────── */
-.accordion-header {
-  width: 100%;
+/* ── View selector ───────────────────────────────────────────────── */
+#viewSelector {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 9px 12px;
-  background: none;
-  border: none;
   border-bottom: 1px solid #eee;
+  flex-shrink: 0;
+}
+.view-btn {
+  flex: 1;
+  padding: 9px 8px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: none;
   cursor: pointer;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: #555;
-  text-align: left;
-  transition: background 0.12s;
+  letter-spacing: 0.04em;
+  color: #888;
+  transition: color 0.15s, border-color 0.15s, background 0.12s;
 }
-.accordion-header:hover { background: #f7f7f7; }
-
-.accordion-header .acc-arrow {
-  font-size: 10px;
-  flex-shrink: 0;
-  transition: transform 0.15s;
-}
-
-/* Active view accordion (News Activity / Political Landscape) */
-.accordion-header.acc-active {
+.view-btn:hover { color: #555; background: #f7f7f7; }
+.view-btn.active {
   color: #1f6feb;
+  border-bottom-color: #1f6feb;
   background: #f0f5ff;
 }
 
-/* Toggle arrow characters via content so CSS controls display */
-.accordion-header .acc-arrow { display: inline-block; width: 10px; }
-.accordion-header.acc-active .acc-arrow::before { content: "▼"; }
-.accordion-header:not(.acc-active):not(.acc-open) .acc-arrow::before { content: "▶"; }
-.accordion-header.acc-open .acc-arrow::before { content: "▼"; }
-
-.accordion-body {
+/* ── Section body (flat sections) ────────────────────────────────── */
+.section-body {
   padding: 10px 12px;
   border-bottom: 1px solid #eee;
 }
-.accordion-body:last-child { border-bottom: none; }
+.section-body:last-child { border-bottom: none; }
 
 .section-title {
   font-weight: 700;

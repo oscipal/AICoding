@@ -34,11 +34,14 @@
       <span id="locationStatus"></span>
     </div>
 
-    <!-- Accordion 1: News Activity (default open, active view) -->
-    <button class="accordion-header acc-active" id="accActivity">
-      <span class="acc-arrow"></span> News Activity
-    </button>
-    <div class="accordion-body" id="bodyActivity">
+    <!-- View selector buttons -->
+    <div id="viewSelector">
+      <button id="btnActivity" class="view-btn active">News Activity</button>
+      <button id="btnPolitical" class="view-btn">Political Landscape</button>
+    </div>
+
+    <!-- News Activity options -->
+    <div id="bodyActivity" class="section-body">
       <div id="renderModeRow">
         <span class="render-label">Standard</span>
         <button id="btnHybrid" class="toggle-pill" type="button">Hybrid</button>
@@ -51,58 +54,54 @@
       <div id="summaryCount"></div>
     </div>
 
-    <!-- Accordion 2: Political Landscape -->
-    <button class="accordion-header" id="accPolitical">
-      <span class="acc-arrow"></span> Political Landscape
-    </button>
-    <div class="accordion-body" id="bodyPolitical" style="display:none">
+    <!-- Political Landscape options -->
+    <div id="bodyPolitical" class="section-body" style="display:none">
       <div id="politicalSubMode">
         <button id="btnGoldstein" class="active">Goldstein</button>
         <button id="btnTone">Tone</button>
       </div>
     </div>
 
-    <!-- Accordion 3: Search & Filter -->
-    <button class="accordion-header" id="accSearch">
-      <span class="acc-arrow"></span> Search &amp; Filter
-    </button>
-    <div class="accordion-body" id="bodySearch" style="display:none">
-
+    <!-- Search section (flat, always visible) -->
+    <div id="searchSection" class="section-body">
       <div class="section-title">Search country</div>
       <input type="text" id="countrySearch" placeholder="Search country…" autocomplete="off" />
       <div id="countryDropdown"></div>
 
-      <div class="section-title">Search articles</div>
-      <div id="searchRow">
-        <input id="searchInput" type="text" placeholder="Keyword…" autocomplete="off" />
-        <button id="searchBtn" type="button">Search</button>
+      <!-- Hidden in Political Landscape mode -->
+      <div id="articleSearchSection">
+        <div class="section-title">Search articles</div>
+        <div id="searchRow">
+          <input id="searchInput" type="text" placeholder="Keyword…" autocomplete="off" />
+          <button id="searchBtn" type="button">Search</button>
+        </div>
+        <div id="searchDropdown"></div>
+        <div id="searchFields">
+          <label class="search-field-label"><input type="checkbox" id="searchInTitle" checked> Title</label>
+          <label class="search-field-label"><input type="checkbox" id="searchInSummary" checked> Summary</label>
+        </div>
+        <div id="searchMatchRow">
+          <button class="search-match-btn active" id="btnMatchExact" type="button">Exact word</button>
+          <button class="search-match-btn" id="btnMatchContains" type="button">Contains</button>
+        </div>
+        <div id="searchStatus"></div>
       </div>
-      <div id="searchDropdown"></div>
-      <div id="searchFields">
-        <label class="search-field-label"><input type="checkbox" id="searchInTitle" checked> Title</label>
-        <label class="search-field-label"><input type="checkbox" id="searchInSummary" checked> Summary</label>
-      </div>
-      <div id="searchMatchRow">
-        <button class="search-match-btn active" id="btnMatchExact" type="button">Exact word</button>
-        <button class="search-match-btn" id="btnMatchContains" type="button">Contains</button>
-      </div>
-      <div id="searchStatus"></div>
 
-      <div class="section-title">Filter by category</div>
-      <div id="categoryFilters">
-        <button class="cat-btn active" data-cat="conflict">Violence &amp; Conflict</button>
-        <button class="cat-btn active" data-cat="protest">Protest</button>
-        <button class="cat-btn active" data-cat="pressure">Threats &amp; Coercion</button>
-        <button class="cat-btn active" data-cat="disagreement">Demands &amp; Rejection</button>
-        <button class="cat-btn active" data-cat="diplomacy">Diplomacy &amp; Cooperation</button>
+      <!-- Hidden in Political Landscape mode -->
+      <div id="categorySection">
+        <div class="section-title">Filter by category</div>
+        <div id="categoryFilters">
+          <button class="cat-btn active" data-cat="conflict">Violence &amp; Conflict</button>
+          <button class="cat-btn active" data-cat="protest">Protest</button>
+          <button class="cat-btn active" data-cat="pressure">Threats &amp; Coercion</button>
+          <button class="cat-btn active" data-cat="disagreement">Demands &amp; Rejection</button>
+          <button class="cat-btn active" data-cat="diplomacy">Diplomacy &amp; Cooperation</button>
+        </div>
       </div>
     </div>
 
-    <!-- Accordion 4: Statistics -->
-    <button class="accordion-header" id="accStats">
-      <span class="acc-arrow"></span> Statistics
-    </button>
-    <div class="accordion-body" id="bodyStats" style="display:none">
+    <!-- Statistics section (flat, always visible) -->
+    <div id="bodyStats" class="section-body">
       <div class="section-title" id="mostActiveTitle">Most Active</div>
       <div id="mostActive"></div>
       <div class="section-title" style="margin-top:10px">Media Origins</div>
