@@ -1,41 +1,28 @@
-// ── Accordion ─────────────────────────────────────────────────────
-function setupAccordion() {
-  // News Activity and Political Landscape are mutually exclusive view-switchers
-  const accActivity  = document.getElementById("accActivity");
-  const accPolitical = document.getElementById("accPolitical");
-  const bodyActivity  = document.getElementById("bodyActivity");
-  const bodyPolitical = document.getElementById("bodyPolitical");
+// ── View selector ─────────────────────────────────────────────────
+function updateViewUI() {
+  const isActivity = viewMode === "activity";
+  document.getElementById("btnActivity").classList.toggle("active",  isActivity);
+  document.getElementById("btnPolitical").classList.toggle("active", !isActivity);
+  document.getElementById("bodyActivity").style.display  = isActivity  ? "" : "none";
+  document.getElementById("bodyPolitical").style.display = !isActivity ? "" : "none";
+  document.getElementById("articleSearchSection").style.display = isActivity ? "" : "none";
+  document.getElementById("categorySection").style.display      = isActivity ? "" : "none";
+}
 
-  accActivity.addEventListener("click", async () => {
-    if (viewMode === "activity") return; // already active, keep open
+function setupViewSelector() {
+  document.getElementById("btnActivity").addEventListener("click", async () => {
+    if (viewMode === "activity") return;
     viewMode = "activity";
-    accActivity.classList.add("acc-active");
-    accPolitical.classList.remove("acc-active");
-    bodyActivity.style.display  = "";
-    bodyPolitical.style.display = "none";
+    updateViewUI();
     closeTimeSeries();
     await renderSelectionByIndex(Number(document.getElementById("daySlider").value));
   });
 
-  accPolitical.addEventListener("click", async () => {
-    if (viewMode === "political") return; // already active, keep open
+  document.getElementById("btnPolitical").addEventListener("click", async () => {
+    if (viewMode === "political") return;
     viewMode = "political";
-    accPolitical.classList.add("acc-active");
-    accActivity.classList.remove("acc-active");
-    bodyPolitical.style.display = "";
-    bodyActivity.style.display  = "none";
+    updateViewUI();
     await renderSelectionByIndex(Number(document.getElementById("daySlider").value));
-  });
-
-  // Search & Filter and Statistics are independent toggles
-  [["accSearch","bodySearch"], ["accStats","bodyStats"]].forEach(([btnId, bodyId]) => {
-    const btn  = document.getElementById(btnId);
-    const body = document.getElementById(bodyId);
-    btn.addEventListener("click", () => {
-      const open = body.style.display !== "none";
-      body.style.display = open ? "none" : "";
-      btn.classList.toggle("acc-open", !open);
-    });
   });
 }
 
@@ -162,10 +149,26 @@ function buildCountryList() {
     const iso3 = f.properties.iso_3166_1_alpha_3;
     const name = f.properties.name_en;
     if (iso3 && name && !countryNameMap[iso3]) countryNameMap[iso3] = name;
+    if (iso3 && f.geometry) {
+      const geo = f.geometry;
+      const b   = countryBoundsMap[iso3] || new mapboxgl.LngLatBounds();
+      (geo.type === "Polygon" ? [geo.coordinates] : geo.coordinates)
+        .forEach(poly => poly[0].forEach(c => b.extend(c)));
+      countryBoundsMap[iso3] = b;
+    }
   });
 }
 
 function flyToCountry(iso3) {
+  const cached = countryBoundsMap[iso3];
+  if (cached && !cached.isEmpty()) {
+    const camera = map.cameraForBounds(cached, { padding: 60 });
+    if (camera) {
+      map.flyTo({ center: camera.center, zoom: Math.max(Math.min(camera.zoom, 5), 3), duration: 800 });
+      return;
+    }
+  }
+  // Fallback: query currently-rendered tiles
   const features = map.querySourceFeatures("countries", {
     sourceLayer: "country_boundaries",
     filter: ["==", ["get", "iso_3166_1_alpha_3"], iso3]
@@ -498,10 +501,7 @@ async function showTimeSeries(iso3, countryName) {
         if (!periodKey) return;
         closeTimeSeries();
         viewMode = "activity";
-        document.getElementById("accActivity").classList.add("acc-active");
-        document.getElementById("accPolitical").classList.remove("acc-active");
-        document.getElementById("bodyActivity").style.display  = "";
-        document.getElementById("bodyPolitical").style.display = "none";
+        updateViewUI();
         await switchMode(currentMode);
         const slider = document.getElementById("daySlider");
         const pIdx   = availablePeriods.indexOf(periodKey);
