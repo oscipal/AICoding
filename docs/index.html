@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>World News Map</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link href="https://api.mapbox.com/mapbox-gl-js/v3.20.0/mapbox-gl.css" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+  <script src="config.js"></script>
+  <script src="https://api.mapbox.com/mapbox-gl-js/v3.20.0/mapbox-gl.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+  <button id="controlsToggle" title="Toggle controls">&#9776;</button>
+
+  <div id="controls">
+
+    <!-- Always visible: time slider section -->
+    <div id="sliderSection">
+      <div id="sliderTopRow">
+        <span id="dateLabel">Loading…</span>
+        <div id="modeButtons">
+          <button id="btnDaily" class="active">Daily</button>
+          <button id="btnWeekly">Weekly</button>
+          <button id="btnMonthly">Monthly</button>
+        </div>
+      </div>
+      <input id="daySlider" type="range" min="0" max="0" value="0" step="1" />
+      <div id="utilRow">
+        <button class="util-btn-sm" id="locateBtn" type="button">📍 My location</button>
+        <button class="util-btn-sm" id="zoomOutBtn" type="button">🌍 Zoom out</button>
+      </div>
+      <span id="locationStatus"></span>
+    </div>
+
+    <!-- Accordion 1: News Activity (default open, active view) -->
+    <button class="accordion-header acc-active" id="accActivity">
+      <span class="acc-arrow"></span> News Activity
+    </button>
+    <div class="accordion-body" id="bodyActivity">
+      <div id="renderModeRow">
+        <span class="render-label">Standard</span>
+        <button id="btnHybrid" class="toggle-pill" type="button">Hybrid</button>
+      </div>
+      <div class="toggle-row">
+        <input type="checkbox" id="showEvents" checked>
+        <label for="showEvents">Show events</label>
+      </div>
+      <div id="eventsCount">Loading…</div>
+      <div id="summaryCount"></div>
+    </div>
+
+    <!-- Accordion 2: Political Landscape -->
+    <button class="accordion-header" id="accPolitical">
+      <span class="acc-arrow"></span> Political Landscape
+    </button>
+    <div class="accordion-body" id="bodyPolitical" style="display:none">
+      <div id="politicalSubMode">
+        <button id="btnGoldstein" class="active">Goldstein</button>
+        <button id="btnTone">Tone</button>
+      </div>
+    </div>
+
+    <!-- Accordion 3: Search & Filter -->
+    <button class="accordion-header" id="accSearch">
+      <span class="acc-arrow"></span> Search &amp; Filter
+    </button>
+    <div class="accordion-body" id="bodySearch" style="display:none">
+
+      <div class="section-title">Search country</div>
+      <input type="text" id="countrySearch" placeholder="Search country…" autocomplete="off" />
+      <div id="countryDropdown"></div>
+
+      <div class="section-title">Search articles</div>
+      <div id="searchRow">
+        <input id="searchInput" type="text" placeholder="Keyword…" autocomplete="off" />
+        <button id="searchBtn" type="button">Search</button>
+      </div>
+      <div id="searchDropdown"></div>
+      <div id="searchFields">
+        <label class="search-field-label"><input type="checkbox" id="searchInTitle" checked> Title</label>
+        <label class="search-field-label"><input type="checkbox" id="searchInSummary" checked> Summary</label>
+      </div>
+      <div id="searchMatchRow">
+        <button class="search-match-btn active" id="btnMatchExact" type="button">Exact word</button>
+        <button class="search-match-btn" id="btnMatchContains" type="button">Contains</button>
+      </div>
+      <div id="searchStatus"></div>
+
+      <div class="section-title">Filter by category</div>
+      <div id="categoryFilters">
+        <button class="cat-btn active" data-cat="conflict">Violence &amp; Conflict</button>
+        <button class="cat-btn active" data-cat="protest">Protest</button>
+        <button class="cat-btn active" data-cat="pressure">Threats &amp; Coercion</button>
+        <button class="cat-btn active" data-cat="disagreement">Demands &amp; Rejection</button>
+        <button class="cat-btn active" data-cat="diplomacy">Diplomacy &amp; Cooperation</button>
+      </div>
+    </div>
+
+    <!-- Accordion 4: Statistics -->
+    <button class="accordion-header" id="accStats">
+      <span class="acc-arrow"></span> Statistics
+    </button>
+    <div class="accordion-body" id="bodyStats" style="display:none">
+      <div class="section-title" id="mostActiveTitle">Most Active</div>
+      <div id="mostActive"></div>
+      <div class="section-title" style="margin-top:10px">Media Origins</div>
+      <div id="mediaOrigins"><div style="font-size:11px;color:#999">Loading…</div></div>
+    </div>
+
+  </div>
+
+  <div id="map"></div>
+
+  <!-- Info button -->
+  <button id="infoBtn" title="About this map">?</button>
+
+  <!-- Info modal -->
+  <div id="infoOverlay">
+    <div id="infoModal">
+      <div id="infoModalHeader">
+        <div>
+          <h2>World News Map</h2>
+          <p style="color:#777;font-size:11px;margin:0">Powered by the GDELT Project</p>
+        </div>
+        <button id="infoModalClose">×</button>
+      </div>
+      <div id="infoModalBody">
+        <h3>Data source</h3>
+        <p>This map uses the <strong>GDELT Events 2.0</strong> dataset, which automatically scans
+        news articles from around the world every 15 minutes and extracts political events — who
+        did what to whom, and where. Each dot on the map represents one news article in which
+        a political event was identified.</p>
+
+        <h3>News coverage bias</h3>
+        <p>GDELT's coverage is <strong>not geographically neutral</strong>. The dataset is
+        dominated by <strong>English-language and Western media</strong> — primarily outlets from
+        North America, the UK, and Australia. Regions with less English-language media presence
+        (Central Africa, Central Asia, parts of Latin America) are significantly underrepresented.</p>
+
+        <h3>Event categories</h3>
+        <p>Events are classified using the <strong>CAMEO coding scheme</strong>, a political
+        science framework that only captures <em>actor-to-actor political interactions</em>.</p>
+        <ul>
+          <li><span class="cat-dot" style="background:#e74c3c"></span><strong>Violence &amp; Conflict</strong> — armed fighting, assault, mass violence</li>
+          <li><span class="cat-dot" style="background:#e67e22"></span><strong>Protest</strong> — demonstrations, strikes, civil unrest</li>
+          <li><span class="cat-dot" style="background:#9b59b6"></span><strong>Threats &amp; Coercion</strong> — threats, shows of force, sanctions, coercion</li>
+          <li><span class="cat-dot" style="background:#f39c12"></span><strong>Demands &amp; Rejection</strong> — demands, disapproval, rejection, investigations</li>
+          <li><span class="cat-dot" style="background:#27ae60"></span><strong>Diplomacy &amp; Cooperation</strong> — statements, consultations, aid, agreements</li>
+        </ul>
+
+        <h3>Goldstein scale</h3>
+        <p>The <strong>Goldstein</strong> sub-mode colors countries by their weighted average
+        Goldstein score — ranging from <strong>−10</strong> (most destabilizing) to
+        <strong>+10</strong> (most cooperative).</p>
+        <ul>
+          <li><span class="cat-dot" style="background:#1a9641"></span> &gt; +4 — strongly cooperative</li>
+          <li><span class="cat-dot" style="background:#a6d96a"></span> +2 to +4 — cooperative</li>
+          <li><span class="cat-dot" style="background:#d9ef8b"></span> 0 to +2 — slightly cooperative</li>
+          <li><span class="cat-dot" style="background:#fee08b"></span> −1 to 0 — neutral</li>
+          <li><span class="cat-dot" style="background:#fc8d59"></span> −3 to −1 — conflictual</li>
+          <li><span class="cat-dot" style="background:#d73027"></span> −6 to −3 — very conflictual</li>
+          <li><span class="cat-dot" style="background:#a50026"></span> &lt; −6 — highly destabilizing</li>
+        </ul>
+
+        <h3>Media tone</h3>
+        <p>The <strong>Tone</strong> sub-mode colors countries by the average media sentiment of
+        articles in which that country appears as the initiating actor.</p>
+        <ul>
+          <li><span class="cat-dot" style="background:#1a9641"></span> &gt; +2 — positive coverage</li>
+          <li><span class="cat-dot" style="background:#91cf60"></span> 0 to +2 — slightly positive</li>
+          <li><span class="cat-dot" style="background:#fee090"></span> −2 to 0 — slightly negative</li>
+          <li><span class="cat-dot" style="background:#fc8d59"></span> −5 to −2 — negative</li>
+          <li><span class="cat-dot" style="background:#d73027"></span> &lt; −5 — very negative</li>
+        </ul>
+
+        <h3>Other controls</h3>
+        <ul>
+          <li><strong>Country search</strong> — fly to a country; in Political Landscape mode opens its Goldstein time series.</li>
+          <li><strong>Most Active</strong> — top 5 countries for the current view and period. Click any to fly there.</li>
+          <li><strong>Media Origins</strong> — news outlet countries inferred from domain TLDs.</li>
+          <li><strong>Hybrid mode</strong> — shows a heatmap at low zoom levels that transitions to individual clusters as you zoom in.</li>
+        </ul>
+
+        <hr class="info-divider">
+        <p style="font-size:11px;color:#888;margin-top:12px">
+          Data provided by the <a href="https://www.gdeltproject.org/" target="_blank" rel="noopener" style="color:#1f6feb">GDELT Project</a>
+          under <a href="https://creativecommons.org/licenses/by/3.0/" target="_blank" rel="noopener" style="color:#1f6feb">CC BY 3.0</a>.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Article panel -->
+  <div id="articlePanel">
+    <div id="articlePanelHeader">
+      <div>
+        <span id="articlePanelTitle">Articles</span>
+        <div id="articlePanelSubtitle"></div>
+      </div>
+      <button id="articlePanelClose" type="button" aria-label="Close article panel">Close</button>
+    </div>
+    <div id="articleList"></div>
+  </div>
+
+  <!-- Time series panel -->
+  <div id="tsPanel">
+    <div id="tsPanelHeader">
+      <div>
+        <span id="tsCountryName">—</span>
+        <span id="tsSubtitle">Weighted avg. Goldstein score (outgoing events)</span>
+      </div>
+      <button id="tsClose">×</button>
+    </div>
+    <div id="tsChartWrap">
+      <canvas id="tsChart"></canvas>
+    </div>
+  </div>
+
+  <script src="js/state.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/map.js"></script>
+</body>
+</html>

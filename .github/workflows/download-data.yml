@@ -1,0 +1,52 @@
+name: Download daily GDELT data
+
+on:
+  schedule:
+    - cron: '0 8 * * *'   # 08:00 UTC — previous day's GDELT data is fully available
+  workflow_dispatch:
+    inputs:
+      summary_limit:
+        description: "Optional: limit number of articles summarized for quick tests"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+jobs:
+  download:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4.3.1
+
+      - name: Set up Python
+        uses: actions/setup-python@v6.2.0
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          pip install requests pyyaml sumy nltk numpy trafilatura
+          pip install newspaper3k
+
+      - name: Download yesterday's GDELT data
+        run: |
+          DATE=$(date -u -d "yesterday" +%Y%m%d)
+          echo "Downloading data for $DATE"
+          if [ -n "${{ github.event.inputs.summary_limit }}" ]; then
+            echo "Quick test mode: summary_limit=${{ github.event.inputs.summary_limit }}"
+            python scripts/download_events.py $DATE --summary-limit "${{ github.event.inputs.summary_limit }}"
+          else
+            python scripts/download_events.py $DATE
+          fi
+          
+      - name: Commit and push new data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/points_data/ docs/goldstein_data/ docs/mb_data/ docs/final_data/
+          git diff --cached --quiet && echo "No new data" || \
+            git commit -m "data: add GDELT data for $(date -u -d yesterday +%Y-%m-%d)" && \
+            git push
