@@ -1,0 +1,561 @@
+// ── View selector ─────────────────────────────────────────────────
+function updateViewUI() {
+  const isActivity = viewMode === "activity";
+  document.getElementById("btnActivity").classList.toggle("active",  isActivity);
+  document.getElementById("btnPolitical").classList.toggle("active", !isActivity);
+  document.getElementById("bodyActivity").style.display  = isActivity  ? "" : "none";
+  document.getElementById("bodyPolitical").style.display = !isActivity ? "" : "none";
+  document.getElementById("articleSearchSection").style.display = isActivity ? "" : "none";
+  document.getElementById("categorySection").style.display      = isActivity ? "" : "none";
+}
+
+function setupViewSelector() {
+  document.getElementById("btnActivity").addEventListener("click", async () => {
+    if (viewMode === "activity") return;
+    viewMode = "activity";
+    updateViewUI();
+    closeTimeSeries();
+    await renderSelectionByIndex(Number(document.getElementById("daySlider").value));
+  });
+
+  document.getElementById("btnPolitical").addEventListener("click", async () => {
+    if (viewMode === "political") return;
+    viewMode = "political";
+    updateViewUI();
+    await renderSelectionByIndex(Number(document.getElementById("daySlider").value));
+  });
+}
+
+// ── Keyword search ────────────────────────────────────────────────
+function buildWordList() {
+  const words = new Set();
+  const addText = str => {
+    if (!str) return;
+    str.toLowerCase()
+      .split(/[^a-zÀ-ɏ']+/)
+      .filter(w => w.length >= 3 && !STOP_WORDS.has(w))
+      .forEach(w => words.add(w));
+  };
+  for (const f of allPointsForDay) addText(f.properties?.title);
+  for (const idx of Object.values(summaryIndexCache)) {
+    for (const entry of Object.values(idx)) {
+      addText(entry.title);
+      addText(entry.summary);
+    }
+  }
+  return words;
+}
+
+function setupKeywordSearch() {
+  const input    = document.getElementById("searchInput");
+  const dropdown = document.getElementById("searchDropdown");
+  let suggestions = [];
+  let kbdIdx = -1;
+
+  function renderSuggestions(q) {
+    kbdIdx = -1;
+    dropdown.innerHTML = "";
+    if (!q || q.length < 2) { dropdown.classList.remove("open"); return; }
+    const words = buildWordList();
+    suggestions = [...words].filter(w => w.startsWith(q)).sort((a, b) => a.localeCompare(b)).slice(0, 8);
+    if (!suggestions.length) { dropdown.classList.remove("open"); return; }
+    suggestions.forEach(word => {
+      const div = document.createElement("div");
+      div.className = "search-opt";
+      div.textContent = word;
+      div.addEventListener("mousedown", e => { e.preventDefault(); input.value = word; dropdown.classList.remove("open"); });
+      dropdown.appendChild(div);
+    });
+    dropdown.classList.add("open");
+  }
+
+  input.addEventListener("input", e => renderSuggestions(e.target.value.trim().toLowerCase()));
+  input.addEventListener("keydown", e => {
+    const opts = dropdown.querySelectorAll(".search-opt");
+    if (e.key === "ArrowDown") {
+      kbdIdx = Math.min(kbdIdx + 1, opts.length - 1);
+      opts.forEach((o, i) => o.classList.toggle("kbd-selected", i === kbdIdx));
+      e.preventDefault();
+    } else if (e.key === "ArrowUp") {
+      kbdIdx = Math.max(kbdIdx - 1, 0);
+      opts.forEach((o, i) => o.classList.toggle("kbd-selected", i === kbdIdx));
+      e.preventDefault();
+    } else if (e.key === "Enter" && kbdIdx >= 0 && suggestions[kbdIdx]) {
+      input.value = suggestions[kbdIdx];
+      dropdown.classList.remove("open");
+    } else if (e.key === "Escape") {
+      dropdown.classList.remove("open");
+    }
+  });
+  input.addEventListener("blur", () => setTimeout(() => dropdown.classList.remove("open"), 150));
+}
+
+async function searchArticles() {
+  const query    = document.getElementById("searchInput").value.trim().toLowerCase();
+  const statusEl = document.getElementById("searchStatus");
+  if (!query) { statusEl.textContent = ""; closeArticlePanel(); return; }
+  statusEl.textContent = "Searching…";
+
+  const slider    = document.getElementById("daySlider");
+  const periodKey = availablePeriods[Number(slider.value)];
+  if (!periodKey) { statusEl.textContent = "No data loaded."; return; }
+
+  const dayKeys = currentMode === "daily"
+    ? [periodKey]
+    : availableDays.filter(d =>
+        currentMode === "weekly" ? getWeekKey(d) === periodKey : getMonthKey(d) === periodKey
+      );
+
+  const indexes = await Promise.all(dayKeys.map(loadSummaryIndex));
+  const merged  = Object.assign({}, ...indexes);
+
+  const matches = allPointsForDay
+    .map(f => {
+      const props = f.properties || {};
+      const extra = merged[props.url] || {};
+      return { ...f, properties: { ...props, ...extra } };
+    })
+    .filter(f => {
+      const p = f.properties;
+      if (!p.title || p.title === "No title found") return false;
+      const inTitle   = document.getElementById("searchInTitle").checked;
+      const inSummary = document.getElementById("searchInSummary").checked;
+      if (!inTitle && !inSummary) return false;
+      const exactMode = document.getElementById("btnMatchExact").classList.contains("active");
+      const test = exactMode
+        ? str => new RegExp(`(?<![\\wÀ-ɏ])(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})(?![\\wÀ-ɏ])`, "i").test(str)
+        : str => str.toLowerCase().includes(query);
+      return (inTitle   && test(p.title   || "")) ||
+             (inSummary && test(p.summary || ""));
+    });
+
+  if (!matches.length) {
+    statusEl.textContent = `No results for "${query}".`;
+    closeArticlePanel();
+    return;
+  }
+  statusEl.textContent = `${matches.length} result${matches.length !== 1 ? "s" : ""} for "${query}"`;
+  document.getElementById("articlePanelTitle").textContent    = `${matches.length} result${matches.length !== 1 ? "s" : ""}: "${query}"`;
+  document.getElementById("articlePanelSubtitle").textContent = "";
+  document.getElementById("articleList").innerHTML            = matches.map(f => renderArticleItem(f.properties)).join("");
+  document.getElementById("articlePanel").classList.add("visible");
+  document.getElementById("infoBtn").style.display = "none";
+}
+
+// ── Country search ────────────────────────────────────────────────
+function buildCountryList() {
+  const features = map.querySourceFeatures("countries", { sourceLayer: "country_boundaries" });
+  features.forEach(f => {
+    const iso3 = f.properties.iso_3166_1_alpha_3;
+    const name = f.properties.name_en;
+    if (iso3 && name && !countryNameMap[iso3]) countryNameMap[iso3] = name;
+    if (iso3 && f.geometry) {
+      const geo = f.geometry;
+      const b   = countryBoundsMap[iso3] || new mapboxgl.LngLatBounds();
+      (geo.type === "Polygon" ? [geo.coordinates] : geo.coordinates)
+        .forEach(poly => poly[0].forEach(c => b.extend(c)));
+      countryBoundsMap[iso3] = b;
+    }
+  });
+}
+
+function flyToCountry(iso3) {
+  const cached = countryBoundsMap[iso3];
+  if (cached && !cached.isEmpty()) {
+    const camera = map.cameraForBounds(cached, { padding: 60 });
+    if (camera) {
+      map.flyTo({ center: camera.center, zoom: Math.max(Math.min(camera.zoom, 5), 3), duration: 800 });
+      return;
+    }
+  }
+  // Fallback: query currently-rendered tiles
+  const features = map.querySourceFeatures("countries", {
+    sourceLayer: "country_boundaries",
+    filter: ["==", ["get", "iso_3166_1_alpha_3"], iso3]
+  });
+  if (!features.length) return;
+  const bounds = new mapboxgl.LngLatBounds();
+  features.forEach(f => {
+    const geo = f.geometry;
+    (geo.type === "Polygon" ? [geo.coordinates] : geo.coordinates)
+      .forEach(poly => poly[0].forEach(c => bounds.extend(c)));
+  });
+  if (bounds.isEmpty()) return;
+  const camera = map.cameraForBounds(bounds, { padding: 60 });
+  if (!camera) return;
+  map.flyTo({ center: camera.center, zoom: Math.max(Math.min(camera.zoom, 5), 3), duration: 800 });
+}
+
+function setupCountrySearch() {
+  const input    = document.getElementById("countrySearch");
+  const dropdown = document.getElementById("countryDropdown");
+  let matches = [];
+  let kbdIdx  = -1;
+
+  function renderDropdown(q) {
+    kbdIdx = -1;
+    dropdown.innerHTML = "";
+    if (!q) { dropdown.classList.remove("open"); return; }
+    matches = Object.entries(countryNameMap)
+      .filter(([iso3, name]) => name.toLowerCase().includes(q) || iso3.toLowerCase().startsWith(q))
+      .sort((a, b) => {
+        const ai = a[1].toLowerCase().indexOf(q);
+        const bi = b[1].toLowerCase().indexOf(q);
+        return (ai === 0 ? -1 : bi === 0 ? 1 : ai - bi) || a[1].localeCompare(b[1]);
+      })
+      .slice(0, 8);
+    if (!matches.length) { dropdown.classList.remove("open"); return; }
+    matches.forEach(([iso3, name]) => {
+      const div = document.createElement("div");
+      div.className = "country-opt";
+      div.textContent = name;
+      div.addEventListener("click", () => selectCountry(iso3, name));
+      dropdown.appendChild(div);
+    });
+    dropdown.classList.add("open");
+  }
+
+  input.addEventListener("input", e => renderDropdown(e.target.value.trim().toLowerCase()));
+  input.addEventListener("keydown", e => {
+    const opts = dropdown.querySelectorAll(".country-opt");
+    if (e.key === "ArrowDown") {
+      kbdIdx = Math.min(kbdIdx + 1, opts.length - 1);
+      opts.forEach((o, i) => o.classList.toggle("kbd-selected", i === kbdIdx));
+      e.preventDefault();
+    } else if (e.key === "ArrowUp") {
+      kbdIdx = Math.max(kbdIdx - 1, 0);
+      opts.forEach((o, i) => o.classList.toggle("kbd-selected", i === kbdIdx));
+      e.preventDefault();
+    } else if (e.key === "Enter" && kbdIdx >= 0 && matches[kbdIdx]) {
+      const [iso3, name] = matches[kbdIdx];
+      selectCountry(iso3, name);
+      e.preventDefault();
+    } else if (e.key === "Escape") {
+      dropdown.classList.remove("open");
+      input.blur();
+    }
+  });
+  document.addEventListener("click", e => {
+    if (!input.contains(e.target) && !dropdown.contains(e.target))
+      dropdown.classList.remove("open");
+  });
+}
+
+async function showArticlesForCountry(iso3, name) {
+  if (!allPointsForDay.length) return;
+  const lowerName = name.toLowerCase();
+  const matches = allPointsForDay.filter(f => {
+    const loc = (f.properties?.location || "").toLowerCase();
+    return loc === lowerName || loc.endsWith(", " + lowerName);
+  });
+  if (!matches.length) return;
+  await showArticlePanel(matches);
+  document.getElementById("articlePanelTitle").textContent =
+    `${matches.length} article${matches.length !== 1 ? "s" : ""} — ${name}`;
+}
+
+function selectCountry(iso3, name) {
+  document.getElementById("countrySearch").value = name;
+  document.getElementById("countryDropdown").classList.remove("open");
+  buildCountryList();
+  flyToCountry(iso3);
+  if (viewMode === "political" && goldsteinByIso[iso3]) showTimeSeries(iso3, name);
+  else if (viewMode === "activity") showArticlesForCountry(iso3, name);
+}
+
+// ── Most Active ───────────────────────────────────────────────────
+function renderMostActive() {
+  const el      = document.getElementById("mostActive");
+  const titleEl = document.getElementById("mostActiveTitle");
+  if (!el) return;
+  let entries = [];
+
+  if (viewMode === "activity") {
+    titleEl.textContent = "Most Active";
+    entries = Object.entries(countByIso)
+      .filter(([, n]) => n > 0)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([iso3, n]) => ({ iso3, name: countryNameMap[iso3] || iso3, value: n.toLocaleString() + " events" }));
+  } else if (politicalSubMode === "goldstein") {
+    titleEl.textContent = "Most Conflictual";
+    entries = Object.entries(goldsteinByIso)
+      .filter(([, d]) => d && d.goldstein !== undefined)
+      .sort((a, b) => a[1].goldstein - b[1].goldstein)
+      .slice(0, 5)
+      .map(([iso3, d]) => ({
+        iso3, name: countryNameMap[iso3] || iso3,
+        value: (d.goldstein > 0 ? "+" : "") + d.goldstein.toFixed(1)
+      }));
+  } else {
+    titleEl.textContent = "Most Negative Tone";
+    entries = Object.entries(goldsteinByIso)
+      .filter(([, d]) => d && d.avg_tone !== null && d.avg_tone !== undefined)
+      .sort((a, b) => a[1].avg_tone - b[1].avg_tone)
+      .slice(0, 5)
+      .map(([iso3, d]) => ({
+        iso3, name: countryNameMap[iso3] || iso3,
+        value: (d.avg_tone > 0 ? "+" : "") + d.avg_tone.toFixed(1) + " tone"
+      }));
+  }
+
+  if (!entries.length) {
+    el.innerHTML = '<div style="font-size:11px;color:#999;padding:2px 0">No data</div>';
+    return;
+  }
+  el.innerHTML = entries.map(e =>
+    `<div class="most-active-item" data-iso3="${e.iso3}">
+      <span class="most-active-name">${e.name}</span>
+      <span class="most-active-val">${e.value}</span>
+    </div>`
+  ).join("");
+  el.querySelectorAll(".most-active-item").forEach(item => {
+    item.addEventListener("click", () => {
+      const iso3 = item.dataset.iso3;
+      buildCountryList();
+      flyToCountry(iso3);
+      if (viewMode === "political" && goldsteinByIso[iso3])
+        showTimeSeries(iso3, countryNameMap[iso3] || iso3);
+    });
+  });
+}
+
+// ── Media Origins ─────────────────────────────────────────────────
+function renderMediaOrigins() {
+  const el = document.getElementById("mediaOrigins");
+  if (!el) return;
+  if (viewMode !== "activity" || !allPointsForDay.length) {
+    el.innerHTML = '<div style="font-size:11px;color:#999">Not available in this view</div>';
+    return;
+  }
+  const counts = {};
+  allPointsForDay.forEach(f => {
+    const country = domainToCountry(f.properties.source);
+    counts[country] = (counts[country] || 0) + 1;
+  });
+  const total  = Object.values(counts).reduce((a, b) => a + b, 0);
+  const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  const top    = sorted.slice(0, 6);
+  const otherCount = sorted.slice(6).reduce((a, [, n]) => a + n, 0);
+  if (otherCount > 0) top.push(["Other", otherCount]);
+  el.innerHTML = top.map(([label, n]) => {
+    const pct = Math.round(n / total * 100);
+    return `<div class="media-origin-item">
+      <span style="min-width:100px;font-weight:600">${label}</span>
+      <div class="media-origin-bar-wrap"><div class="media-origin-bar" style="width:${pct}%"></div></div>
+      <span class="media-origin-val">${n.toLocaleString()}</span>
+    </div>`;
+  }).join("");
+}
+
+// ── Article panel ─────────────────────────────────────────────────
+function renderArticleItem(props) {
+  const esc = s => String(s ?? "")
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;").replace(/'/g, "&#39;");
+
+  const cat     = CAT_BY_ID[featureCategory(props)] || CAT_BY_ID["diplomacy"];
+  const toneNum = parseFloat(props.tone);
+  const toneStr = isNaN(toneNum) ? "" :
+    `<span style="color:${toneNum < -2 ? "#e74c3c" : toneNum > 2 ? "#27ae60" : "#888"}">
+      ${toneNum > 0 ? "+" : ""}${toneNum.toFixed(1)} tone</span>`;
+  const link  = props.url
+    ? `<a class="article-link" href="${esc(props.url)}" target="_blank" rel="noopener">${esc(props.source || "source")}</a>`
+    : esc(props.source || "—");
+  const title   = esc(props.title || props.event_type || "Untitled article");
+  const summary = esc(props.summary || "No summary available.");
+  return `
+    <div class="article-item">
+      <div class="article-title">${title}</div>
+      <div class="article-cat" style="color:${cat.color}">${cat.label}</div>
+      <div class="article-event">${esc(props.event_type || "")}</div>
+      <div class="article-loc">📍 ${esc(props.location || "Unknown")}</div>
+      <div class="article-meta">${toneStr}${link}</div>
+      <details class="article-summary-wrap">
+        <summary class="article-summary-toggle">Show summary</summary>
+        <div class="article-summary">${summary}</div>
+      </details>
+    </div>`;
+}
+
+function getSummaryDayKeys(features) {
+  const fromFeatures = [...new Set(features.map(f => f?.properties?.data_day).filter(Boolean))];
+  if (fromFeatures.length) return fromFeatures;
+  if (currentMode === "daily" && currentDayKey) return [currentDayKey];
+  const slider    = document.getElementById("daySlider");
+  const periodKey = availablePeriods[Number(slider.value)];
+  if (!periodKey) return [];
+  return availableDays.filter(d =>
+    currentMode === "weekly" ? getWeekKey(d) === periodKey : getMonthKey(d) === periodKey
+  );
+}
+
+async function showArticlePanel(features) {
+  const dayKeys = getSummaryDayKeys(features);
+  const indexes = await Promise.all(dayKeys.map(loadSummaryIndex));
+  const merged  = Object.assign({}, ...indexes);
+
+  const enriched = features.map(f => {
+    const props = f.properties || {};
+    const extra = merged[props.url] || {};
+    return { ...f, properties: { ...props, ...extra } };
+  });
+
+  const isBadTitle   = t => !t || t === "No title found" || t === "Failed to extract title";
+  const isBadSummary = s => !s || s === "No summary found" || s.startsWith("Failed to summarize");
+  const isSummarized = p => !isBadTitle(p.title) && !isBadSummary(p.summary);
+
+  const n            = features.length;
+  const withSummary  = enriched.filter(f => isSummarized(f.properties)).length;
+  const pct          = n > 0 ? Math.round(withSummary / n * 100) : 0;
+  document.getElementById("articlePanelTitle").textContent    = `${n} article${n !== 1 ? "s" : ""}`;
+  document.getElementById("articlePanelSubtitle").textContent = `${withSummary} of ${n} summarized (${pct}%)`;
+
+  const sorted = [...enriched].sort((a, b) => {
+    return !isSummarized(a.properties) - !isSummarized(b.properties);
+  });
+  document.getElementById("articleList").innerHTML = sorted.map(f => renderArticleItem(f.properties)).join("");
+  document.getElementById("articlePanel").classList.add("visible");
+  document.getElementById("infoBtn").style.display = "none";
+  popup.remove();
+}
+
+function closeArticlePanel() {
+  document.getElementById("articlePanel").classList.remove("visible");
+  document.getElementById("infoBtn").style.display = "";
+}
+
+// ── Time series ───────────────────────────────────────────────────
+async function showTimeSeries(iso3, countryName) {
+  document.getElementById("tsCountryName").textContent = countryName;
+  document.getElementById("tsPanel").classList.add("visible");
+
+  const labels = [], scores = [], tones = [], counts = [], periodKeys = [];
+
+  if (currentMode === "daily") {
+    const allData = await Promise.all(availableDays.map(day => loadGoldstein(day)));
+    for (let i = 0; i < availableDays.length; i++) {
+      const day   = availableDays[i];
+      const entry = allData[i].find(d => d.iso3 === iso3);
+      labels.push(`${day.slice(4,6)}/${day.slice(6,8)}`);
+      scores.push(entry ? entry.goldstein : null);
+      tones.push(entry ? (entry.avg_tone ?? null) : null);
+      counts.push(entry ? entry.n : 0);
+      periodKeys.push(day);
+    }
+  } else {
+    const periods = computeAvailablePeriods(currentMode);
+    const allAgg  = await Promise.all(periods.map(p => buildGoldsteinAggregate(currentMode, p)));
+    for (let i = 0; i < periods.length; i++) {
+      const entry = allAgg[i].find(d => d.iso3 === iso3);
+      labels.push(periods[i]);
+      scores.push(entry ? entry.goldstein : null);
+      tones.push(entry ? (entry.avg_tone ?? null) : null);
+      counts.push(entry ? entry.n : 0);
+      periodKeys.push(periods[i]);
+    }
+  }
+
+  const hasTone = tones.some(t => t !== null);
+  const ctx = document.getElementById("tsChart").getContext("2d");
+  if (tsChart) tsChart.destroy();
+  tsChart = new Chart(ctx, {
+    type: "line",
+    data: {
+      labels,
+      datasets: [
+        {
+          label: "Goldstein Score",
+          data: scores,
+          borderColor: "#1f6feb",
+          backgroundColor: "rgba(31,111,235,0.08)",
+          tension: 0.35, fill: true, spanGaps: true,
+          pointRadius: 0, pointHoverRadius: 4,
+        },
+        ...(hasTone ? [{
+          label: "Avg Tone",
+          data: tones,
+          borderColor: "#e67e22",
+          backgroundColor: "rgba(230,126,34,0.0)",
+          tension: 0.35, fill: false, spanGaps: true,
+          pointRadius: 0, pointHoverRadius: 4,
+          borderDash: [4, 3],
+        }] : []),
+        {
+          label: "Event Count",
+          data: counts,
+          type: "bar",
+          backgroundColor: "rgba(150,150,150,0.25)",
+          borderColor: "rgba(150,150,150,0.5)",
+          borderWidth: 1,
+          yAxisID: "yCount",
+        }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: "index", intersect: false },
+      onClick: async (evt, elements) => {
+        if (!elements.length) return;
+        const periodKey = periodKeys[elements[0].index];
+        if (!periodKey) return;
+        closeTimeSeries();
+        viewMode = "activity";
+        updateViewUI();
+        await switchMode(currentMode);
+        const slider = document.getElementById("daySlider");
+        const pIdx   = availablePeriods.indexOf(periodKey);
+        if (pIdx >= 0) { slider.value = pIdx; await renderSelectionByIndex(pIdx); }
+        if (tsCountryBounds) map.fitBounds(tsCountryBounds, { padding: 40, maxZoom: 5, duration: 800 });
+      },
+      plugins: {
+        legend: { display: true, position: "top", labels: { font: { size: 10 }, boxWidth: 12 } },
+        tooltip: { bodyFont: { size: 11 }, titleFont: { size: 11 } }
+      },
+      scales: {
+        x: { ticks: { font: { size: 10 } } },
+        y: {
+          min: -10, max: 10,
+          title: { display: true, text: "Score", font: { size: 10 } },
+          ticks: { font: { size: 10 } },
+          grid: { color: ctx => ctx.tick.value === 0 ? "rgba(0,0,0,0.35)" : "rgba(0,0,0,0.06)" }
+        },
+        yCount: {
+          position: "right",
+          title: { display: true, text: "Events", font: { size: 10 } },
+          ticks: { font: { size: 10 } },
+          grid: { drawOnChartArea: false }
+        }
+      }
+    }
+  });
+}
+
+function closeTimeSeries() {
+  document.getElementById("tsPanel").classList.remove("visible");
+  if (tsChart) { tsChart.destroy(); tsChart = null; }
+}
+
+// ── Geolocation ───────────────────────────────────────────────────
+function locateUser() {
+  const statusEl = document.getElementById("locationStatus");
+  if (!navigator.geolocation) { statusEl.textContent = "Geolocation not supported."; return; }
+  statusEl.textContent = "Getting your location…";
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      const { longitude: lng, latitude: lat } = pos.coords;
+      map.flyTo({ center: [lng, lat], zoom: 7, essential: true });
+      if (userLocationMarker) userLocationMarker.remove();
+      userLocationMarker = new mapboxgl.Marker()
+        .setLngLat([lng, lat])
+        .setPopup(new mapboxgl.Popup().setHTML("<strong>You are here</strong>"))
+        .addTo(map);
+      statusEl.textContent = `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+    },
+    err => {
+      const msgs = { 1: "Permission denied.", 2: "Position unavailable.", 3: "Timed out." };
+      statusEl.textContent = msgs[err.code] || "Could not get location.";
+    },
+    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+  );
+}
