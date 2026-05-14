@@ -1,4 +1,4 @@
-"""
+﻿"""
 Download and preprocess GDELT Events 2.0 data for a date range.
 
 For each date:
@@ -9,6 +9,8 @@ For each date:
     frontend category system works without any changes
   - Streams and discards raw files — never stores the full uncompressed data
   - Writes one compact GeoJSON per day to docs/points_data/
+  - Writes per-country aggregates to docs/mb_data/ and docs/goldstein_data/
+  - Writes compact article title/summary lookups to docs/final_data/
     (same path and format as download_gkg2.py — the two scripts are interchangeable)
 
 Usage:
@@ -395,7 +397,23 @@ def _domain_success(domain: str) -> None:
 
 
 # ── Process one day ───────────────────────────────────────────────────────────
-def process_day(day_key, urls, force=False, summary_limit=None):
+def build_summary_index(features):
+    """Return the compact URL -> title/summary lookup used by the frontend."""
+    summary_index = {}
+    for feat in features:
+        props = feat.get("properties", {})
+        url = props.get("url")
+        if not url or url in summary_index:
+            continue
+        title = props.get("title")
+        summary = props.get("summary")
+        if title is None and summary is None:
+            continue
+        summary_index[url] = {"title": title, "summary": summary}
+    return summary_index
+
+
+def process_day(day_key, urls, force=False, summary_limit=None, skip_summaries=False):
     out_path = GEOJSON_DIR / f"{day_key}.geojson"
     if out_path.exists() and not force:
         print(f"  {day_key}  already exists, skipping. (use --force to overwrite)")
@@ -419,40 +437,43 @@ def process_day(day_key, urls, force=False, summary_limit=None):
 
     print(f"\n  {day_key}  {len(all_features):,} point features  {len(all_gs_rows):,} events")
 
-
-    # ── Summarize articles and attach to features ─────────────────────────────
-    def summarize_feature(idx_feature):
-        idx, feature = idx_feature
-        url = feature["properties"].get("url", "")
-        if not url:
-            return idx, "No URL", "No summary available."
-        return idx, *extract_title_and_summary(url, num_sentences=3)
-
-    if summary_limit is None:
-        summarize_targets = list(enumerate(all_features))
+    if skip_summaries:
+        print("  Skipping article summarization.")
+        summary_index = {}
     else:
-        summarize_targets = list(enumerate(all_features[:summary_limit]))
+        def summarize_feature(idx_feature):
+            idx, feature = idx_feature
+            url = feature["properties"].get("url", "")
+            if not url:
+                return idx, "No URL", "No summary available."
+            return idx, *extract_title_and_summary(url, num_sentences=3)
 
-    print(f"  Summarizing {len(summarize_targets)} articles with {SUMMARY_WORKERS} workers...")
-    done = 0
-    with concurrent.futures.ThreadPoolExecutor(max_workers=SUMMARY_WORKERS) as pool:
-        futures = [pool.submit(summarize_feature, target) for target in summarize_targets]
-        for fut in concurrent.futures.as_completed(futures):
-            idx, title, summary = fut.result()
-            all_features[idx]["properties"]["title"] = title
-            all_features[idx]["properties"]["summary"] = summary
-            done += 1
-            if done % 50 == 0 or done == len(summarize_targets):
-                print(f"    [{done}/{len(summarize_targets)}] summarized", end="\r")
+        if summary_limit is None:
+            summarize_targets = list(enumerate(all_features))
+        else:
+            summarize_targets = list(enumerate(all_features[:summary_limit]))
 
-    if summary_limit is not None and len(all_features) > len(summarize_targets):
-        print(f"\n  Summary limit active: skipped {len(all_features) - len(summarize_targets):,} articles")
+        print(f"  Summarizing {len(summarize_targets)} articles with {SUMMARY_WORKERS} workers...")
+        done = 0
+        with concurrent.futures.ThreadPoolExecutor(max_workers=SUMMARY_WORKERS) as pool:
+            futures = [pool.submit(summarize_feature, target) for target in summarize_targets]
+            for fut in concurrent.futures.as_completed(futures):
+                idx, title, summary = fut.result()
+                all_features[idx]["properties"]["title"] = title
+                all_features[idx]["properties"]["summary"] = summary
+                done += 1
+                if done % 50 == 0 or done == len(summarize_targets):
+                    print(f"    [{done}/{len(summarize_targets)}] summarized", end="\r")
 
-    geojson = {"type": "FeatureCollection", "features": all_features}
-    summarized_path = OUTPUT_DIR / f"{day_key}_with_summary.geojson"
-    with open(summarized_path, "w", encoding="utf-8") as f:
-        json.dump(geojson, f, ensure_ascii=False, indent=2)
-    print(f"\n  Saved summarized points -> {summarized_path}  ({summarized_path.stat().st_size / 1e6:.1f} MB)")
+        if summary_limit is not None and len(all_features) > len(summarize_targets):
+            print(f"\n  Summary limit active: skipped {len(all_features) - len(summarize_targets):,} articles")
+
+        summary_index = build_summary_index(all_features)
+
+    summary_path = OUTPUT_DIR / f"{day_key}_summaries.json"
+    with open(summary_path, "w", encoding="utf-8") as f:
+        json.dump(summary_index, f, ensure_ascii=False, separators=(",", ":"))
+    print(f"\n  Saved summaries -> {summary_path}  ({summary_path.stat().st_size / 1e6:.1f} MB, {len(summary_index):,} articles)")
 
     # Keep points_data lightweight for fast frontend map loading.
     light_features = []
@@ -533,6 +554,7 @@ def main():
     argv = sys.argv[1:]
     force = False
     summary_limit = None
+    skip_summaries = False
     args = []
 
     i = 0
@@ -540,6 +562,8 @@ def main():
         a = argv[i]
         if a == "--force":
             force = True
+        elif a in {"--skip-summaries", "--no-summaries"}:
+            skip_summaries = True
         elif a.startswith("--summary-limit="):
             try:
                 summary_limit = max(int(a.split("=", 1)[1]), 1)
@@ -567,7 +591,7 @@ def main():
         dates_path = Path("docs/mb_data/dates.json")
         if not dates_path.exists():
             print("No arguments given and docs/mb_data/dates.json not found.")
-            print("Usage: python scripts/download_events.py [YYYYMMDD [YYYYMMDD]]")
+            print("Usage: python scripts/download_events.py [YYYYMMDD [YYYYMMDD]] [--force] [--summary-limit N] [--skip-summaries]")
             sys.exit(1)
         with open(dates_path) as f:
             day_keys = json.load(f)
@@ -580,7 +604,7 @@ def main():
         days = list(date_range(parse_date(args[0]), parse_date(args[1])))
 
     else:
-        print("Usage: python scripts/download_events.py [YYYYMMDD [YYYYMMDD]] [--force] [--summary-limit N]")
+        print("Usage: python scripts/download_events.py [YYYYMMDD [YYYYMMDD]] [--force] [--summary-limit N] [--skip-summaries]")
         sys.exit(1)
 
     print(f"Processing {len(days)} day(s): {days[0]} to {days[-1]}")
@@ -593,9 +617,9 @@ def main():
         if not urls:
             print(f"  {key}  no Events 2.0 files found in master list.")
             continue
-        process_day(key, urls, force=force, summary_limit=summary_limit)
+        process_day(key, urls, force=force, summary_limit=summary_limit, skip_summaries=skip_summaries)
 
-    # ── Update dates.json with all available days ─────────────────────────────
+    # Update dates.json with all available days
     dates_path = MB_DATA_DIR / "dates.json"
     existing = []
     if dates_path.exists():
@@ -612,6 +636,6 @@ def main():
 
 
 
-
 if __name__ == "__main__":
     main()
+

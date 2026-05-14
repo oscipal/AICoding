@@ -110,8 +110,6 @@ async function renderSelectionByIndex(index) {
   const rows  = await getRowsForSelection(currentMode, periodKey);
   const label = formatPeriodLabel(currentMode, periodKey);
 
-  renderChoropleth(rows, label);
-
   if (map.getSource("events")) {
     if (currentMode === "daily") {
       currentDayKey = periodKey;
@@ -129,6 +127,7 @@ async function renderSelectionByIndex(index) {
       }
       allPointsForDay = combined;
     }
+    renderChoropleth(mergeActivityRowsWithPointLocations(rows, allPointsForDay), label);
     applyPointFilter();
     updateEventLayerVisibility();
     renderMediaOrigins();
@@ -321,6 +320,7 @@ map.on("load", async () => {
       showTimeSeries(iso3, name);
       return;
     }
+    showArticlesForCountry(iso3, name);
     map.fitBounds(b, { padding: 40, maxZoom: 5, duration: 1000 });
   });
 

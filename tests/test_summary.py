@@ -56,27 +56,29 @@ def test_extract_returns_title_and_summary():
     assert isinstance(summary, str)
 
 
-def test_extract_short_text_returns_fallback_summary():
+def test_extract_short_text_uses_trafilatura_fallback():
     # Article text under 100 chars — should return the fallback message, not a real summary
     mock_article = MagicMock()
     mock_article.text = "Too short."
     mock_article.title = "Some Title"
 
-    with patch("scripts.download_events.Article", return_value=mock_article):
+    with patch("scripts.download_events.Article", return_value=mock_article), \
+         patch("scripts.download_events._try_trafilatura", return_value=("Fallback Title", "Fallback summary.")):
         title, summary = extract_title_and_summary("http://fake.url")
 
-    assert title == "Some Title"
-    assert summary == "Article text extraction failed or was too short."
+    assert title == "Fallback Title"
+    assert summary == "Fallback summary."
 
 
 def test_extract_both_retries_fail_returns_fallback():
     # Both download attempts raise an exception — should return the failure fallback strings
-    with patch("scripts.download_events.Article", side_effect=Exception("connection error")):
+    with patch("scripts.download_events.Article", side_effect=Exception("connection error")), \
+         patch("scripts.download_events._try_trafilatura", side_effect=ValueError("fallback failed")):
         title, summary = extract_title_and_summary("http://fake.url")
 
     assert title == "Failed to extract title"
     assert "Failed to summarize" in summary
-    assert "connection error" in summary
+    assert "fallback failed" in summary
 
 
 def test_extract_first_attempt_fails_second_succeeds():

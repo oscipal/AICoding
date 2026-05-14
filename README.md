@@ -6,50 +6,71 @@ An interactive map of global political events powered by the [GDELT Project](htt
 
 ## What it does
 
-- Displays geo-located news events from GDELT Events 2.0, updated daily
-- **News Activity** view: event density choropleth per country with clustered event points
-- **Political Landscape** view with two sub-modes:
-  - **Goldstein** — colors countries by weighted average Goldstein score (event type, −10 to +10)
-  - **Tone** — colors countries by average media sentiment (how articles are written, not what they describe)
-- Filter events by category (conflict, protest, diplomacy, etc.) and time period (daily / weekly / monthly)
-- **Country search** — type a country name to fly to it; opens its Goldstein time series in political mode
-- **Most Active** list — top 5 countries for the current view (highest activity, most conflictual, or most negative tone)
-- **Source breakdown** — clicking a cluster shows which news outlets are represented
-- Click a country in Political Landscape mode to see a Goldstein time series
+- Shows geo-located news events from GDELT Events 2.0
+- **News Activity** view: country choropleth plus clustered event points
+- **Political Landscape** view with two modes:
+  - **Goldstein**: colors countries by weighted average Goldstein score for event behavior, from strongly cooperative to strongly conflictual
+  - **Tone**: colors countries by average media tone, where negative values indicate more critical or hostile reporting and positive values indicate more favorable reporting
+- Includes top-3 political ranking groups for the current day: best media tone, worst media tone, most conflictual, and most diplomatic
+- Filters events by category and time period
+- Lets you search for a country and fly to it
+- Lets you click a country in News Activity to open that country's articles
+- Shows source breakdowns for clusters
 
 ## Data pipeline
 
 A GitHub Actions workflow runs every day at 08:00 UTC:
 
 1. Downloads the previous day's GDELT Events 2.0 files
-2. Processes them into three outputs under `docs/`:
-   - `points_data/<YYYYMMDD>.geojson` — geo-located event points
-   - `goldstein_data/<YYYYMMDD>.json` — per-country Goldstein scores
-   - `mb_data/<YYYYMMDD>.json` — per-country event counts
-3. Commits and pushes the new data files, triggering a GitHub Pages deploy
+2. Processes them into files under `docs/`
+3. Commits and pushes the updated data, which triggers GitHub Pages
 
-To trigger a manual run, go to **Actions → Download daily GDELT data → Run workflow**.
+The generated data is split into:
+
+- `docs/points_data/<YYYYMMDD>.geojson` - geo-located event points
+- `docs/goldstein_data/<YYYYMMDD>.json` - per-country Goldstein and Tone scores
+- `docs/mb_data/<YYYYMMDD>.json` - per-country event counts
+- `docs/final_data/<YYYYMMDD>_summaries.json` - compact URL -> `{title, summary}` lookup used by the frontend
+
+Older `_with_summary.geojson` files are still supported by the frontend as a fallback, but new downloads use the compact summary index.
+
+To trigger a manual run, open the GitHub Actions workflow and run **Download daily GDELT data** manually.
 
 ## Local development
 
-```bash
-pip install requests pyyaml
-python serve.py          # serves docs/ at http://localhost:8000
+Run the local server:
+
+```powershell
+python serve.py 8000
 ```
 
-To download data for a specific date range:
+Then open `http://localhost:8000/index.html`.
 
-```bash
+To download data for a specific date or date range:
+
+```powershell
+python scripts/download_events.py 20260101
 python scripts/download_events.py 20260101 20260107
+python scripts/download_events.py 20260101 --skip-summaries
 ```
+
+## Tests
+
+The test suite lives in `tests/` and uses `pytest`.
+
+```powershell
+python -m pytest tests/
+```
+
+The tests cover date helpers, zip processing, article summarization, and the compact summary index used by the frontend.
 
 ## Configuration
 
-`configs/config.yml` controls output directories and minimum geo precision for event points.
+`configs/config.yml` controls output directories and processing limits.
 
 ## Data source
 
-[GDELT Events 2.0](http://data.gdeltproject.org/gdeltv2/masterfilelist.txt) — scans news from around the world every 15 minutes and extracts political actor-to-actor events using the CAMEO coding scheme. Coverage is dominated by English-language and Western media.
+[GDELT Events 2.0](http://data.gdeltproject.org/gdeltv2/masterfilelist.txt) scans news from around the world every 15 minutes and extracts political actor-to-actor events using the CAMEO coding scheme.
 
 ## License
 

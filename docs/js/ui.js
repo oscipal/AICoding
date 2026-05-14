@@ -243,15 +243,35 @@ function setupCountrySearch() {
 
 async function showArticlesForCountry(iso3, name) {
   if (!allPointsForDay.length) return;
-  const lowerName = name.toLowerCase();
+  const names = countryArticleNames(iso3, name);
   const matches = allPointsForDay.filter(f => {
     const loc = (f.properties?.location || "").toLowerCase();
-    return loc === lowerName || loc.endsWith(", " + lowerName);
+    return names.some(country => loc === country || loc.endsWith(", " + country));
   });
   if (!matches.length) return;
   await showArticlePanel(matches);
   document.getElementById("articlePanelTitle").textContent =
     `${matches.length} article${matches.length !== 1 ? "s" : ""} — ${name}`;
+}
+
+function countryArticleNames(iso3, name) {
+  const names = new Set();
+  const add = value => {
+    if (value) names.add(String(value).trim().toLowerCase());
+  };
+  const normalizedIso = normalizeIso3(iso3);
+  add(name);
+  add(countryNameMap[normalizedIso]);
+  const aliases = {
+    BIH: ["Bosnia", "Bosnia and Herzegovina"],
+    ESH: ["Western Sahara"],
+    MNE: ["Montenegro"],
+    ROU: ["Romania"],
+    SVN: ["Slovenia"],
+    XKX: ["Kosovo"],
+  };
+  (aliases[normalizedIso] || []).forEach(add);
+  return [...names];
 }
 
 function selectCountry(iso3, name) {
@@ -268,48 +288,92 @@ function renderMostActive() {
   const el      = document.getElementById("mostActive");
   const titleEl = document.getElementById("mostActiveTitle");
   if (!el) return;
-  let entries = [];
 
   if (viewMode === "activity") {
     titleEl.textContent = "Most Active";
-    entries = Object.entries(countByIso)
+    const entries = Object.entries(countByIso)
       .filter(([, n]) => n > 0)
       .sort((a, b) => b[1] - a[1])
       .slice(0, 5)
       .map(([iso3, n]) => ({ iso3, name: countryNameMap[iso3] || iso3, value: n.toLocaleString() + " events" }));
-  } else if (politicalSubMode === "goldstein") {
-    titleEl.textContent = "Most Conflictual";
-    entries = Object.entries(goldsteinByIso)
-      .filter(([, d]) => d && d.goldstein !== undefined)
-      .sort((a, b) => a[1].goldstein - b[1].goldstein)
-      .slice(0, 5)
-      .map(([iso3, d]) => ({
-        iso3, name: countryNameMap[iso3] || iso3,
-        value: (d.goldstein > 0 ? "+" : "") + d.goldstein.toFixed(1)
-      }));
-  } else {
-    titleEl.textContent = "Most Negative Tone";
-    entries = Object.entries(goldsteinByIso)
-      .filter(([, d]) => d && d.avg_tone !== null && d.avg_tone !== undefined)
-      .sort((a, b) => a[1].avg_tone - b[1].avg_tone)
-      .slice(0, 5)
-      .map(([iso3, d]) => ({
-        iso3, name: countryNameMap[iso3] || iso3,
-        value: (d.avg_tone > 0 ? "+" : "") + d.avg_tone.toFixed(1) + " tone"
-      }));
+
+    if (!entries.length) {
+      el.innerHTML = '<div style="font-size:11px;color:#999;padding:2px 0">No data</div>';
+      return;
+    }
+    el.innerHTML = entries.map(e => renderRankingItem(e)).join("");
+    attachRankingClicks(el);
+    return;
   }
 
-  if (!entries.length) {
+  titleEl.textContent = "Political Rankings";
+  const hasCountryNames = Object.keys(countryNameMap).length > 20;
+  const rows = Object.entries(goldsteinByIso)
+    .filter(([iso3, d]) => d && (!hasCountryNames || countryNameMap[iso3]));
+  const goldsteinRows = rows.filter(([, d]) => Number.isFinite(d.goldstein));
+  const toneRows = rows.filter(([, d]) => d.avg_tone !== null && d.avg_tone !== undefined && Number.isFinite(d.avg_tone));
+  const sections = [
+    {
+      title: "Best Media Tone",
+      entries: topPoliticalEntries(toneRows, d => d.avg_tone, "desc", d => formatSigned(d.avg_tone, 1) + " tone")
+    },
+    {
+      title: "Worst Media Tone",
+      entries: topPoliticalEntries(toneRows, d => d.avg_tone, "asc", d => formatSigned(d.avg_tone, 1) + " tone")
+    },
+    {
+      title: "Most Conflictual",
+      entries: topPoliticalEntries(goldsteinRows, d => d.goldstein, "asc", d => formatSigned(d.goldstein, 1))
+    },
+    {
+      title: "Most Diplomatic",
+      entries: topPoliticalEntries(goldsteinRows, d => d.goldstein, "desc", d => formatSigned(d.goldstein, 1))
+    },
+  ];
+
+  if (!sections.some(section => section.entries.length)) {
     el.innerHTML = '<div style="font-size:11px;color:#999;padding:2px 0">No data</div>';
     return;
   }
-  el.innerHTML = entries.map(e =>
+
+  el.innerHTML = sections.map(section => `
+    <div class="ranking-group">
+      <div class="ranking-title">${section.title}</div>
+      ${section.entries.length
+        ? section.entries.map(e => renderRankingItem(e)).join("")
+        : '<div style="font-size:11px;color:#999;padding:2px 0">No data</div>'}
+    </div>
+  `).join("");
+  attachRankingClicks(el);
+}
+
+function topPoliticalEntries(rows, valueOf, direction, valueLabel) {
+  const sorted = [...rows]
+    .sort((a, b) => direction === "asc" ? valueOf(a[1]) - valueOf(b[1]) : valueOf(b[1]) - valueOf(a[1]))
+    .slice(0, 3);
+  return sorted.map(([iso3, d]) => ({
+    iso3,
+    name: countryNameMap[iso3] || iso3,
+    value: valueLabel(d)
+  }));
+}
+
+function formatSigned(value, digits) {
+  const n = Number(value);
+  return (n > 0 ? "+" : "") + n.toFixed(digits);
+}
+
+function renderRankingItem(e) {
+  return (
     `<div class="most-active-item" data-iso3="${e.iso3}">
       <span class="most-active-name">${e.name}</span>
       <span class="most-active-val">${e.value}</span>
     </div>`
-  ).join("");
-  el.querySelectorAll(".most-active-item").forEach(item => {
+  );
+}
+
+function attachRankingClicks(container) {
+  container.querySelectorAll(".most-active-item").forEach(item => {
     item.addEventListener("click", () => {
       const iso3 = item.dataset.iso3;
       buildCountryList();
@@ -323,11 +387,15 @@ function renderMostActive() {
 // ── Media Origins ─────────────────────────────────────────────────
 function renderMediaOrigins() {
   const el = document.getElementById("mediaOrigins");
+  const titleEl = document.getElementById("mediaOriginsTitle");
   if (!el) return;
   if (viewMode !== "activity" || !allPointsForDay.length) {
-    el.innerHTML = '<div style="font-size:11px;color:#999">Not available in this view</div>';
+    if (titleEl) titleEl.style.display = "none";
+    el.style.display = "none";
     return;
   }
+  if (titleEl) titleEl.style.display = "";
+  el.style.display = "";
   const counts = {};
   allPointsForDay.forEach(f => {
     const country = domainToCountry(f.properties.source);
