@@ -9,8 +9,7 @@ function dataUrl(path) {
 async function loadDaily(dayKey) {
   if (!dailyCache[dayKey]) {
     const r = await fetch(dataUrl(`mb_data/${dayKey}.json`));
-    if (!r.ok) throw new Error(`Cannot load ${dataUrl(`mb_data/${dayKey}.json`)}`);
-    dailyCache[dayKey] = await r.json();
+    dailyCache[dayKey] = r.ok ? await r.json() : [];
   }
   return dailyCache[dayKey];
 }
@@ -18,8 +17,7 @@ async function loadDaily(dayKey) {
 async function loadPoints(dayKey) {
   if (!pointsCache[dayKey]) {
     const r = await fetch(dataUrl(`points_data/${dayKey}.geojson`));
-    if (!r.ok) throw new Error(`Cannot load ${dataUrl(`points_data/${dayKey}.geojson`)}`);
-    pointsCache[dayKey] = await r.json();
+    pointsCache[dayKey] = r.ok ? await r.json() : { type: "FeatureCollection", features: [] };
   }
   return pointsCache[dayKey];
 }
@@ -35,9 +33,33 @@ async function loadGoldstein(dayKey) {
 async function loadSummaryIndex(dayKey) {
   if (summaryIndexCache[dayKey]) return summaryIndexCache[dayKey];
 
-  const compactRes = await fetch(dataUrl(`final_data/${dayKey}_summaries.json`));
-  if (!compactRes.ok) throw new Error(`Cannot load ${dataUrl(`final_data/${dayKey}_summaries.json`)}`);
-  summaryIndexCache[dayKey] = await compactRes.json();
+  const candidates = [
+    dataUrl(`final_data/${dayKey}_summaries.json`),
+    dataUrl(`final_data/${dayKey}_with_summary.geojson`),
+  ];
+
+  for (const url of candidates) {
+    const res = await fetch(url);
+    if (!res.ok) continue;
+    const payload = await res.json();
+    if (payload && payload.type === "FeatureCollection" && Array.isArray(payload.features)) {
+      summaryIndexCache[dayKey] = Object.fromEntries(
+        payload.features
+          .map(feature => {
+            const props = feature && feature.properties ? feature.properties : {};
+            const key = props.url;
+            if (!key) return null;
+            return [key, { title: props.title, summary: props.summary }];
+          })
+          .filter(Boolean)
+      );
+    } else {
+      summaryIndexCache[dayKey] = payload || {};
+    }
+    return summaryIndexCache[dayKey];
+  }
+
+  summaryIndexCache[dayKey] = {};
   return summaryIndexCache[dayKey];
 }
 
