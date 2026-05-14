@@ -1,6 +1,6 @@
 async function loadDaily(dayKey) {
   if (!dailyCache[dayKey]) {
-    const r = await fetch(`./mb_data/${dayKey}.json`);
+    const r = await fetch(`https://pub-30012b0655ec4874a5c6fa4ffac66389.r2.dev/mb_data/${dayKey}.json`);
     if (!r.ok) throw new Error(`Cannot load mb_data/${dayKey}.json`);
     dailyCache[dayKey] = await r.json();
   }
@@ -9,7 +9,7 @@ async function loadDaily(dayKey) {
 
 async function loadPoints(dayKey) {
   if (!pointsCache[dayKey]) {
-    const r = await fetch(`./points_data/${dayKey}.geojson`);
+    const r = await fetch(`https://pub-30012b0655ec4874a5c6fa4ffac66389.r2.dev/points_data/${dayKey}.geojson`);
     if (!r.ok) return { type: "FeatureCollection", features: [] };
     pointsCache[dayKey] = await r.json();
   }
@@ -18,7 +18,7 @@ async function loadPoints(dayKey) {
 
 async function loadGoldstein(dayKey) {
   if (!goldsteinCache[dayKey]) {
-    const r = await fetch(`./goldstein_data/${dayKey}.json`);
+    const r = await fetch(`https://pub-30012b0655ec4874a5c6fa4ffac66389.r2.dev/goldstein_data/${dayKey}.json`);
     goldsteinCache[dayKey] = r.ok ? await r.json() : [];
   }
   return goldsteinCache[dayKey];
@@ -27,13 +27,13 @@ async function loadGoldstein(dayKey) {
 async function loadSummaryIndex(dayKey) {
   if (summaryIndexCache[dayKey]) return summaryIndexCache[dayKey];
 
-  const compactRes = await fetch(`./final_data/${dayKey}_summaries.json`);
+  const compactRes = await fetch(`https://pub-30012b0655ec4874a5c6fa4ffac66389.r2.dev/final_data/${dayKey}_summaries.json`);
   if (compactRes.ok) {
     summaryIndexCache[dayKey] = await compactRes.json();
     return summaryIndexCache[dayKey];
   }
 
-  const legacyRes = await fetch(`./final_data/${dayKey}_with_summary.geojson`);
+  const legacyRes = await fetch(`https://pub-30012b0655ec4874a5c6fa4ffac66389.r2.dev/final_data/${dayKey}_with_summary.geojson`);
   if (!legacyRes.ok) { summaryIndexCache[dayKey] = {}; return {}; }
   const data = await legacyRes.json();
   const idx = {};
