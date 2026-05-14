@@ -95,7 +95,44 @@ body.loading #loadingIndicator {
   background: #1f6feb; color: white; border-color: #1f6feb;
 }
 
-#daySlider { width: 100%; margin-bottom: 6px; }
+#sliderRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+#daySlider {
+  flex: 1;
+  width: auto;
+}
+
+.slider-step-btn {
+  width: 24px;
+  height: 24px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  background: white;
+  color: #444;
+  cursor: pointer;
+  line-height: 1;
+  font-size: 18px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.slider-step-btn:hover {
+  background: #f4f7fb;
+  color: #1f6feb;
+}
+
+.slider-step-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
 
 #utilRow {
   display: flex;
