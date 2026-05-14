@@ -212,28 +212,38 @@
   </div>
 
   <!-- Date picker modal -->
-  <div id="datePickerOverlay">
+  <div id="datePickerOverlay" tabindex="-1" aria-modal="true" role="dialog">
     <div id="datePickerModal">
       <div id="datePickerHeader">
         <div>
           <h2>Pick a date</h2>
-          <p>Choose a day, week, or month and jump directly to it.</p>
+          <p>Pick a day, week, or month from the calendar.</p>
         </div>
         <button id="datePickerClose" type="button" aria-label="Close date picker">x</button>
       </div>
       <div id="datePickerBody">
-        <div id="datePickerModes">
-          <button type="button" class="picker-mode-btn active" data-mode="daily">Daily</button>
-          <button type="button" class="picker-mode-btn" data-mode="weekly">Weekly</button>
-          <button type="button" class="picker-mode-btn" data-mode="monthly">Monthly</button>
-        </div>
-        <label class="picker-field" for="datePickerInput">
-          <span>Date</span>
-          <input id="datePickerInput" type="date">
-        </label>
-        <div id="datePickerActions">
-          <button id="datePickerCancel" type="button">Cancel</button>
-          <button id="datePickerGo" type="button" class="primary">Go</button>
+        <div id="datePickerCalendar">
+          <div id="datePickerModeBar">
+            <button id="datePickerDailyBtn" type="button">DAILY</button>
+            <button id="datePickerWeeklyBtn" type="button">WEEKLY</button>
+            <button id="datePickerMonthlyBtn" type="button">MONTHLY</button>
+          </div>
+          <div id="datePickerMonthBar">
+            <button id="datePickerPrevMonth" type="button" aria-label="Previous month">&lsaquo;</button>
+            <button id="datePickerMonthLabel" type="button">January 2026</button>
+            <button id="datePickerNextMonth" type="button" aria-label="Next month">&rsaquo;</button>
+          </div>
+          <div id="datePickerWeekdays">
+            <span class="date-picker-weekday-spacer"></span>
+            <span>Mon</span>
+            <span>Tue</span>
+            <span>Wed</span>
+            <span>Thu</span>
+            <span>Fri</span>
+            <span>Sat</span>
+            <span>Sun</span>
+          </div>
+          <div id="datePickerWeeks"></div>
         </div>
       </div>
     </div>
@@ -256,13 +266,17 @@
     <div id="tsPanelHeader">
       <div>
         <span id="tsCountryName">—</span>
-        <span id="tsSubtitle">Weighted avg. Goldstein score (outgoing events)</span>
+        <span id="tsSubtitle">Country activity over time: Goldstein, tone, and event count</span>
       </div>
       <button id="tsClose">×</button>
     </div>
     <div id="tsChartWrap">
       <canvas id="tsChart"></canvas>
     </div>
+  </div>
+
+  <div id="loadingIndicator" aria-live="polite" aria-label="Loading">
+    <span class="loading-spinner"></span>
   </div>
 
   <script src="js/state.js"></script>

@@ -51,9 +51,9 @@ async function buildAggregate(mode, periodKey) {
   const matching = availableDays.filter(d =>
     mode === "weekly" ? getWeekKey(d) === periodKey : getMonthKey(d) === periodKey
   );
+  const allRows = await Promise.all(matching.map(day => loadDaily(day)));
   const totals = {};
-  for (const d of matching) {
-    const rows = await loadDaily(d);
+  for (const rows of allRows) {
     for (const r of rows) {
       if (!r.iso3) continue;
       totals[r.iso3] = (totals[r.iso3] || 0) + (Number(r.count) || 0);

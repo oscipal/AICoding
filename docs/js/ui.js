@@ -26,59 +26,263 @@ function setupViewSelector() {
   });
 }
 
-let datePickerMode = "daily";
+let calendarMonthDate = null;
+let calendarView = "month";
+let calendarSelectionAction = "browse";
 
-function dateValueFromPeriodKey(mode, periodKey) {
+function parseDayKey(dayKey) {
+  return new Date(Date.UTC(+dayKey.slice(0, 4), +dayKey.slice(4, 6) - 1, +dayKey.slice(6, 8)));
+}
+
+function dayKeyFromDate(date) {
+  return [
+    date.getUTCFullYear(),
+    String(date.getUTCMonth() + 1).padStart(2, "0"),
+    String(date.getUTCDate()).padStart(2, "0"),
+  ].join("");
+}
+
+function monthKeyFromDate(date) {
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+function weekKeyFromDate(date) {
+  const tmp = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  const day = tmp.getUTCDay() || 7;
+  tmp.setUTCDate(tmp.getUTCDate() + 4 - day);
+  const yr = tmp.getUTCFullYear();
+  const wk = Math.ceil(((tmp - new Date(Date.UTC(yr, 0, 1))) / 86400000 + 1) / 7);
+  return `${yr}-W${String(wk).padStart(2, "0")}`;
+}
+
+function formatCalendarMonth(date) {
+  return date.toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
+}
+
+function formatCalendarYear(date) {
+  return String(date.getUTCFullYear());
+}
+
+function currentSelectionPeriodKey() {
+  const slider = document.getElementById("daySlider");
+  return availablePeriods[Number(slider.value)] || currentDayKey || "";
+}
+
+function currentSelectionDayKey() {
+  const periodKey = currentSelectionPeriodKey();
   if (!periodKey) return "";
-  if (mode === "daily") {
-    return `${periodKey.slice(0, 4)}-${periodKey.slice(4, 6)}-${periodKey.slice(6, 8)}`;
-  }
+  if (currentMode === "daily") return periodKey;
   const matches = availableDays.filter(d =>
-    mode === "weekly" ? getWeekKey(d) === periodKey : getMonthKey(d) === periodKey
+    currentMode === "weekly" ? getWeekKey(d) === periodKey : getMonthKey(d) === periodKey
   );
-  const day = matches[0] || availableDays[0];
-  if (!day) return "";
-  return `${day.slice(0, 4)}-${day.slice(4, 6)}-${day.slice(6, 8)}`;
+  return matches[0] || "";
 }
 
-function periodKeyFromDateValue(mode, value) {
-  if (!value) return "";
-  const dayKey = value.replace(/-/g, "");
-  if (mode === "daily") return dayKey;
-  if (mode === "weekly") return getWeekKey(dayKey);
-  return getMonthKey(dayKey);
+function monthDaysForCalendar(date) {
+  const first = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
+  const last = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0));
+  const start = new Date(first);
+  const startDay = (start.getUTCDay() || 7) - 1;
+  start.setUTCDate(start.getUTCDate() - startDay);
+  const end = new Date(last);
+  const endDay = 7 - (end.getUTCDay() || 7);
+  end.setUTCDate(end.getUTCDate() + endDay);
+  const weeks = [];
+  const cursor = new Date(start);
+  while (cursor <= end) {
+    const row = [];
+    for (let i = 0; i < 7; i++) {
+      row.push(new Date(cursor));
+      cursor.setUTCDate(cursor.getUTCDate() + 1);
+    }
+    weeks.push(row);
+  }
+  return weeks;
 }
 
-function setDatePickerMode(mode) {
-  datePickerMode = mode;
-  document.querySelectorAll(".picker-mode-btn").forEach(btn => {
-    btn.classList.toggle("active", btn.dataset.mode === mode);
-  });
+function monthPeriodsForYear(year) {
+  const prefix = `${year}-`;
+  const periods = computeAvailablePeriods("monthly").filter(key => key.startsWith(prefix));
+  return periods;
+}
+
+function weekPeriodsForYear(year) {
+  const prefix = `${year}-W`;
+  const periods = computeAvailablePeriods("weekly").filter(key => key.startsWith(prefix));
+  return periods;
 }
 
 function openDatePicker() {
+  const selectedDayKey = currentSelectionDayKey() || currentSelectionPeriodKey() || availableDays[0] || "";
+  const anchor = selectedDayKey ? parseDayKey(selectedDayKey) : new Date();
+  calendarMonthDate = new Date(Date.UTC(anchor.getUTCFullYear(), anchor.getUTCMonth(), 1));
+  calendarView = "month";
+  calendarSelectionAction = currentMode === "monthly" ? "select" : "browse";
+  renderDatePickerCalendar();
   const overlay = document.getElementById("datePickerOverlay");
-  const input = document.getElementById("datePickerInput");
-  const slider = document.getElementById("daySlider");
-  const periodKey = availablePeriods[Number(slider.value)] || "";
-  const dateValue = dateValueFromPeriodKey(currentMode, periodKey || currentDayKey);
-  setDatePickerMode(currentMode);
-  input.value = dateValue || new Date().toISOString().slice(0, 10);
   overlay.classList.add("visible");
+  overlay.focus();
 }
 
 function closeDatePicker() {
   document.getElementById("datePickerOverlay").classList.remove("visible");
 }
 
-async function applyDatePickerSelection() {
-  const input = document.getElementById("datePickerInput");
-  const mode = datePickerMode;
-  const periodKey = periodKeyFromDateValue(mode, input.value);
-  const idx = availablePeriods.indexOf(periodKey);
-  if (idx < 0) return;
-  closeDatePicker();
-  await switchMode(mode, idx);
+function setCalendarView(view) {
+  calendarView = view;
+  renderDatePickerCalendar();
+}
+
+function renderDatePickerCalendar() {
+  if (!calendarMonthDate) return;
+  const weekdaysRow = document.getElementById("datePickerWeekdays");
+  const monthLabel = document.getElementById("datePickerMonthLabel");
+  const weeksWrap = document.getElementById("datePickerWeeks");
+  const dailyBtn = document.getElementById("datePickerDailyBtn");
+  const weeklyBtn = document.getElementById("datePickerWeeklyBtn");
+  const monthlyBtn = document.getElementById("datePickerMonthlyBtn");
+  const year = calendarMonthDate.getUTCFullYear();
+  const monthKey = monthKeyFromDate(calendarMonthDate);
+  const monthPeriods = new Set(monthPeriodsForYear(year));
+  const weekPeriods = weekPeriodsForYear(year);
+  const selectedDayKey = currentSelectionDayKey();
+  const selectedPeriodKey = currentSelectionPeriodKey();
+  const selectedWeekKey = currentMode === "weekly" ? selectedPeriodKey : "";
+  const selectedMonthKey = currentMode === "monthly" ? selectedPeriodKey : "";
+  const todayKey = dayKeyFromDate(new Date());
+  const availableSet = new Set(availableDays);
+
+  if (calendarView === "month") {
+    weekdaysRow.style.display = "grid";
+    dailyBtn.classList.add("active");
+    weeklyBtn.classList.remove("active");
+    monthlyBtn.classList.remove("active");
+    monthLabel.textContent = formatCalendarMonth(calendarMonthDate);
+    monthLabel.classList.toggle("active-month", selectedMonthKey === monthKey);
+    const weeks = monthDaysForCalendar(calendarMonthDate);
+    weeksWrap.innerHTML = weeks.map(week => {
+      const weekKey = weekKeyFromDate(week[0]);
+      const weekNumber = weekKey.slice(-2);
+      const weekActive = currentMode === "weekly" && selectedWeekKey === weekKey;
+      const cells = week.map(day => {
+        const dayKey = dayKeyFromDate(day);
+        const inMonth = day.getUTCMonth() === calendarMonthDate.getUTCMonth();
+        const isAvailable = availableSet.has(dayKey);
+        const classes = ["date-picker-day-btn"];
+        if (!inMonth) classes.push("outside");
+        if (!isAvailable) classes.push("empty");
+        if (selectedDayKey === dayKey) classes.push("active-day");
+        if (currentMode === "weekly" && selectedWeekKey === weekKey) classes.push("active-period");
+        if (currentMode === "monthly" && selectedMonthKey === monthKey && inMonth) classes.push("active-period");
+        if (todayKey === dayKey) classes.push("today");
+        return `<button type="button" class="${classes.join(" ")}" data-day-key="${dayKey}" ${isAvailable ? "" : "disabled"}>${day.getUTCDate()}</button>`;
+      }).join("");
+      return `
+        <div class="date-picker-week">
+          <button type="button" class="date-picker-week-btn${weekActive ? " active-week" : ""}" data-week-key="${weekKey}">W${weekNumber}</button>
+          ${cells}
+        </div>
+      `;
+    }).join("");
+  } else if (calendarView === "year-months") {
+    weekdaysRow.style.display = "none";
+    dailyBtn.classList.remove("active");
+    weeklyBtn.classList.remove("active");
+    monthlyBtn.classList.add("active");
+    monthLabel.textContent = formatCalendarYear(calendarMonthDate);
+    monthLabel.classList.remove("active-month");
+    const months = Array.from({ length: 12 }, (_, i) => new Date(Date.UTC(year, i, 1)));
+    weeksWrap.innerHTML = `<div class="date-picker-month-grid">${
+      months.map(date => {
+        const key = monthKeyFromDate(date);
+        const active = monthKey === key;
+        const hasData = monthPeriods.has(key);
+        return `<button type="button" class="date-picker-month-btn${active ? " active-month" : ""}" data-month-key="${key}" ${hasData ? "" : "disabled"}>${date.toLocaleDateString("en-US", { month: "short", timeZone: "UTC" })}</button>`;
+      }).join("")
+    }</div>`;
+  } else if (calendarView === "year-weeks") {
+    weekdaysRow.style.display = "none";
+    dailyBtn.classList.remove("active");
+    weeklyBtn.classList.add("active");
+    monthlyBtn.classList.remove("active");
+    monthLabel.textContent = formatCalendarYear(calendarMonthDate);
+    monthLabel.classList.remove("active-month");
+    weeksWrap.innerHTML = `<div class="date-picker-year-weeks-grid">${
+      weekPeriods.map(weekKey => {
+        const active = currentMode === "weekly" && selectedWeekKey === weekKey;
+        return `
+          <button type="button" class="date-picker-week-btn${active ? " active-week" : ""}" data-week-key="${weekKey}">W${weekKey.slice(-2)}</button>
+        `;
+      }).join("")
+    }</div>`;
+  }
+
+  document.getElementById("datePickerPrevMonth").onclick = () => {
+    calendarMonthDate = calendarView === "month"
+      ? new Date(Date.UTC(calendarMonthDate.getUTCFullYear(), calendarMonthDate.getUTCMonth() - 1, 1))
+      : new Date(Date.UTC(calendarMonthDate.getUTCFullYear() - 1, 0, 1));
+    renderDatePickerCalendar();
+  };
+  document.getElementById("datePickerNextMonth").onclick = () => {
+    calendarMonthDate = calendarView === "month"
+      ? new Date(Date.UTC(calendarMonthDate.getUTCFullYear(), calendarMonthDate.getUTCMonth() + 1, 1))
+      : new Date(Date.UTC(calendarMonthDate.getUTCFullYear() + 1, 0, 1));
+    renderDatePickerCalendar();
+  };
+  dailyBtn.onclick = () => {
+    calendarSelectionAction = "browse";
+    setCalendarView("month");
+  };
+  weeklyBtn.onclick = () => {
+    calendarSelectionAction = "browse";
+    setCalendarView("year-weeks");
+  };
+  monthlyBtn.onclick = () => {
+    calendarSelectionAction = currentMode === "monthly" ? "select" : "browse";
+    setCalendarView("year-months");
+  };
+  document.getElementById("datePickerMonthLabel").onclick = calendarView === "month"
+    ? () => {
+        calendarSelectionAction = "browse";
+        setCalendarView("year-months");
+      }
+    : null;
+
+  document.querySelectorAll("#datePickerWeeks .date-picker-week-btn").forEach(btn => {
+    btn.onclick = async () => {
+      const weekKey = btn.dataset.weekKey;
+      const idx = computeAvailablePeriods("weekly").indexOf(weekKey);
+      if (idx < 0) return;
+      closeDatePicker();
+      await switchMode("weekly", idx);
+    };
+  });
+  document.querySelectorAll("#datePickerWeeks .date-picker-day-btn").forEach(btn => {
+    btn.onclick = async () => {
+      const dayKey = btn.dataset.dayKey;
+      if (!dayKey || !availableSet.has(dayKey)) return;
+      const idx = computeAvailablePeriods("daily").indexOf(dayKey);
+      if (idx < 0) return;
+      closeDatePicker();
+      await switchMode("daily", idx);
+    };
+  });
+  document.querySelectorAll("#datePickerWeeks .date-picker-month-btn").forEach(btn => {
+    btn.onclick = async () => {
+      const monthKey = btn.dataset.monthKey;
+      const month = parseInt(monthKey.slice(5, 7), 10) - 1;
+      const year = parseInt(monthKey.slice(0, 4), 10);
+      calendarMonthDate = new Date(Date.UTC(year, month, 1));
+      if (calendarSelectionAction === "select") {
+        const idx = computeAvailablePeriods("monthly").indexOf(monthKey);
+        if (idx < 0) return;
+        closeDatePicker();
+        await switchMode("monthly", idx);
+        return;
+      }
+      setCalendarView("month");
+    };
+  });
 }
 
 // ── Keyword search ────────────────────────────────────────────────
@@ -550,108 +754,112 @@ function closeArticlePanel() {
 
 // ── Time series ───────────────────────────────────────────────────
 async function showTimeSeries(iso3, countryName) {
-  document.getElementById("tsCountryName").textContent = countryName;
-  document.getElementById("tsPanel").classList.add("visible");
+  beginLoadingNow();
+  try {
+    document.getElementById("tsCountryName").textContent = countryName;
+    document.getElementById("tsPanel").classList.add("visible");
 
-  const labels = [], scores = [], tones = [], counts = [], periodKeys = [];
+    const labels = [], scores = [], tones = [], counts = [], periodKeys = [];
 
-  if (currentMode === "daily") {
-    const allData = await Promise.all(availableDays.map(day => loadGoldstein(day)));
-    for (let i = 0; i < availableDays.length; i++) {
-      const day   = availableDays[i];
-      const entry = allData[i].find(d => d.iso3 === iso3);
-      labels.push(`${day.slice(4,6)}/${day.slice(6,8)}`);
-      scores.push(entry ? entry.goldstein : null);
-      tones.push(entry ? (entry.avg_tone ?? null) : null);
-      counts.push(entry ? entry.n : 0);
-      periodKeys.push(day);
-    }
-  } else {
-    const periods = computeAvailablePeriods(currentMode);
-    const allAgg  = await Promise.all(periods.map(p => buildGoldsteinAggregate(currentMode, p)));
-    for (let i = 0; i < periods.length; i++) {
-      const entry = allAgg[i].find(d => d.iso3 === iso3);
-      labels.push(periods[i]);
-      scores.push(entry ? entry.goldstein : null);
-      tones.push(entry ? (entry.avg_tone ?? null) : null);
-      counts.push(entry ? entry.n : 0);
-      periodKeys.push(periods[i]);
-    }
-  }
-
-  const hasTone = tones.some(t => t !== null);
-  const ctx = document.getElementById("tsChart").getContext("2d");
-  if (tsChart) tsChart.destroy();
-  tsChart = new Chart(ctx, {
-    type: "line",
-    data: {
-      labels,
-      datasets: [
-        {
-          label: "Goldstein Score",
-          data: scores,
-          borderColor: "#1f6feb",
-          backgroundColor: "rgba(31,111,235,0.08)",
-          tension: 0.35, fill: true, spanGaps: true,
-          pointRadius: 0, pointHoverRadius: 4,
-        },
-        ...(hasTone ? [{
-          label: "Avg Tone",
-          data: tones,
-          borderColor: "#e67e22",
-          backgroundColor: "rgba(230,126,34,0.0)",
-          tension: 0.35, fill: false, spanGaps: true,
-          pointRadius: 0, pointHoverRadius: 4,
-          borderDash: [4, 3],
-        }] : []),
-        {
-          label: "Event Count",
-          data: counts,
-          type: "bar",
-          backgroundColor: "rgba(150,150,150,0.25)",
-          borderColor: "rgba(150,150,150,0.5)",
-          borderWidth: 1,
-          yAxisID: "yCount",
-        }
-      ]
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      interaction: { mode: "index", intersect: false },
-      onClick: async (evt, elements) => {
-        if (!elements.length) return;
-        const periodKey = periodKeys[elements[0].index];
-        if (!periodKey) return;
-        closeTimeSeries();
-        viewMode = "activity";
-        updateViewUI();
-        await switchMode(currentMode);
-        const slider = document.getElementById("daySlider");
-        const pIdx   = availablePeriods.indexOf(periodKey);
-        if (pIdx >= 0) { slider.value = pIdx; await renderSelectionByIndex(pIdx); }
-        if (tsCountryBounds) map.fitBounds(tsCountryBounds, { padding: 40, maxZoom: 5, duration: 800 });
-      },
-      plugins: {
-        legend: { display: true, position: "top", labels: { font: { size: 10 }, boxWidth: 12 } },
-        tooltip: { bodyFont: { size: 11 }, titleFont: { size: 11 } }
-      },
-      scales: {
-        x: { ticks: { font: { size: 10 } } },
-        y: {
-          min: -10, max: 10,
-          title: { display: true, text: "Score", font: { size: 10 } },
-          ticks: { font: { size: 10 } },
-          grid: { color: ctx => ctx.tick.value === 0 ? "rgba(0,0,0,0.35)" : "rgba(0,0,0,0.06)" }
-        },
-        yCount: {
-          position: "right",
-          title: { display: true, text: "Events", font: { size: 10 } },
-          ticks: { font: { size: 10 } },
-          grid: { drawOnChartArea: false }
-        }
+    if (currentMode === "daily") {
+      const allData = await Promise.all(availableDays.map(day => loadGoldstein(day)));
+      for (let i = 0; i < availableDays.length; i++) {
+        const day   = availableDays[i];
+        const entry = allData[i].find(d => d.iso3 === iso3);
+        labels.push(`${day.slice(4,6)}/${day.slice(6,8)}`);
+        scores.push(entry ? entry.goldstein : null);
+        tones.push(entry ? (entry.avg_tone ?? null) : null);
+        counts.push(entry ? entry.n : 0);
+        periodKeys.push(day);
+      }
+    } else {
+      const periods = computeAvailablePeriods(currentMode);
+      const allAgg  = await Promise.all(periods.map(p => buildGoldsteinAggregate(currentMode, p)));
+      for (let i = 0; i < periods.length; i++) {
+        const entry = allAgg[i].find(d => d.iso3 === iso3);
+        labels.push(periods[i]);
+        scores.push(entry ? entry.goldstein : null);
+        tones.push(entry ? (entry.avg_tone ?? null) : null);
+        counts.push(entry ? entry.n : 0);
+        periodKeys.push(periods[i]);
       }
     }
-  });
+
+    const hasTone = tones.some(t => t !== null);
+    const ctx = document.getElementById("tsChart").getContext("2d");
+    if (tsChart) tsChart.destroy();
+    tsChart = new Chart(ctx, {
+      type: "line",
+      data: {
+        labels,
+        datasets: [
+          {
+            label: "Goldstein Score",
+            data: scores,
+            borderColor: "#1f6feb",
+            backgroundColor: "rgba(31,111,235,0.08)",
+            tension: 0.35, fill: true, spanGaps: true,
+            pointRadius: 0, pointHoverRadius: 4,
+          },
+          ...(hasTone ? [{
+            label: "Avg Tone",
+            data: tones,
+            borderColor: "#e67e22",
+            backgroundColor: "rgba(230,126,34,0.0)",
+            tension: 0.35, fill: false, spanGaps: true,
+            pointRadius: 0, pointHoverRadius: 4,
+          }] : []),
+          {
+            label: "Event Count",
+            data: counts,
+            type: "bar",
+            backgroundColor: "rgba(150,150,150,0.25)",
+            borderColor: "rgba(150,150,150,0.5)",
+            borderWidth: 1,
+            yAxisID: "yCount",
+          }
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        interaction: { mode: "index", intersect: false },
+        onClick: async (evt, elements) => {
+          if (!elements.length) return;
+          const periodKey = periodKeys[elements[0].index];
+          if (!periodKey) return;
+          closeTimeSeries();
+          viewMode = "activity";
+          updateViewUI();
+          await switchMode(currentMode);
+          const slider = document.getElementById("daySlider");
+          const pIdx   = availablePeriods.indexOf(periodKey);
+          if (pIdx >= 0) { slider.value = pIdx; await renderSelectionByIndex(pIdx); }
+          if (tsCountryBounds) map.fitBounds(tsCountryBounds, { padding: 40, maxZoom: 5, duration: 800 });
+        },
+        plugins: {
+          legend: { display: true, position: "top", labels: { font: { size: 10 }, boxWidth: 12 } },
+          tooltip: { bodyFont: { size: 11 }, titleFont: { size: 11 } }
+        },
+        scales: {
+          x: { ticks: { font: { size: 10 } } },
+          y: {
+            min: -10, max: 10,
+            title: { display: true, text: "Score", font: { size: 10 } },
+            ticks: { font: { size: 10 } },
+            grid: { color: ctx => ctx.tick.value === 0 ? "rgba(0,0,0,0.35)" : "rgba(0,0,0,0.06)" }
+          },
+          yCount: {
+            position: "right",
+            title: { display: true, text: "Events", font: { size: 10 } },
+            ticks: { font: { size: 10 } },
+            grid: { drawOnChartArea: false }
+          }
+        }
+      }
+    });
+  } finally {
+    endLoading();
+  }
 }
 
 function closeTimeSeries() {
