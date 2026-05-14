@@ -141,6 +141,7 @@ async function renderSelectionByIndex(index, token = null, forceLoading = null) 
         ]);
         if (myToken !== selectionRenderToken) return;
         allPointsForDay = geojson.features;
+        loadedPointsPeriodKey = periodKey;
         renderChoropleth(mergeActivityRowsWithPointLocations(rows, allPointsForDay), label);
         applyPointFilter();
         updateEventLayerVisibility();
@@ -156,6 +157,7 @@ async function renderSelectionByIndex(index, token = null, forceLoading = null) 
       ]);
       if (myToken !== selectionRenderToken) return;
       allPointsForDay = points;
+      loadedPointsPeriodKey = periodKey;
       renderChoropleth(mergeActivityRowsWithPointLocations(rows, allPointsForDay), label);
       applyPointFilter();
       updateEventLayerVisibility();
@@ -180,6 +182,42 @@ function scheduleSliderRender(index) {
     sliderRenderTimer = null;
     renderSelectionByIndex(index, token, true);
   }, 1000);
+}
+
+async function openNearestEventArticles(point) {
+  const periodKey = currentSelectionPeriodKey();
+  if (!periodKey) return false;
+
+  let features = allPointsForDay;
+  if (loadedPointsPeriodKey !== periodKey || !features.length) {
+    beginLoadingNow();
+    try {
+      features = await loadSelectionPoints(currentMode, periodKey);
+      allPointsForDay = features;
+      loadedPointsPeriodKey = periodKey;
+    } finally {
+      endLoading();
+    }
+  }
+
+  let best = null;
+  let bestDist = Infinity;
+  for (const f of features) {
+    const coords = f.geometry && f.geometry.coordinates;
+    if (!Array.isArray(coords) || coords.length < 2) continue;
+    const projected = map.project(coords);
+    const dx = projected.x - point.x;
+    const dy = projected.y - point.y;
+    const dist = dx * dx + dy * dy;
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = f;
+    }
+  }
+
+  if (!best || bestDist > 20 * 20) return false;
+  await showArticlePanel([best]);
+  return true;
 }
 
 async function previewSelectionByIndex(index, token = null) {
@@ -374,18 +412,19 @@ map.on("load", async () => {
   });
 
   // ── Choropleth interactions ───────────────────────────────────
-  map.on("click", "country-fills", e => {
-    if (!e.features.length) return;
+  map.on("click", e => {
     const pointHits = map.queryRenderedFeatures(e.point, {
       layers: ["clusters","unclustered-point","events-raw-point"]
     });
     if (pointHits.length) return;
-    const props = e.features[0].properties;
+
+    const countryHits = map.queryRenderedFeatures(e.point, { layers: ["country-fills"] });
+    if (!countryHits.length) return;
+    const props = countryHits[0].properties;
     const iso3  = props.iso_3166_1_alpha_3;
     const name  = props.name_en || iso3;
 
-    // Cache bounds from the clicked feature geometry
-    const geo = e.features[0].geometry;
+    const geo = countryHits[0].geometry;
     const b   = countryBoundsMap[iso3] || new mapboxgl.LngLatBounds();
     (geo.type === "Polygon" ? [geo.coordinates] : geo.coordinates)
       .forEach(poly => poly[0].forEach(c => b.extend(c)));
@@ -417,35 +456,50 @@ map.on("load", async () => {
   });
 
   // ── Event point interactions ──────────────────────────────────
-  let clusterClickTimer = null;
-
-  map.on("click", "clusters", e => {
-    e.originalEvent.stopPropagation();
-    const f = map.queryRenderedFeatures(e.point, { layers: ["clusters"] });
-    if (!f.length) return;
-    const clusterId = f[0].properties.cluster_id;
-    clusterClickTimer = setTimeout(async () => {
-      clusterClickTimer = null;
-      try {
-        const leaves = await clusterLeaves(map.getSource("events"), clusterId, Infinity);
-        await showArticlePanel(leaves);
-      } catch(err) { console.error("clusterLeaves error:", err); }
-    }, 250);
-  });
-
-  map.on("dblclick", "clusters", e => {
-    if (clusterClickTimer) { clearTimeout(clusterClickTimer); clusterClickTimer = null; }
-    const f = map.queryRenderedFeatures(e.point, { layers: ["clusters"] });
-    if (!f.length) return;
-    const clusterId = f[0].properties.cluster_id;
-    map.getSource("events").getClusterExpansionZoom(clusterId, (err, zoom) => {
-      if (!err) map.easeTo({ center: f[0].geometry.coordinates, zoom: zoom + 1 });
+  map.on("click", async e => {
+    const pointHits = map.queryRenderedFeatures(e.point, {
+      layers: ["clusters","unclustered-point","events-raw-point"]
     });
-    e.originalEvent.stopPropagation();
-  });
+    if (pointHits.length) {
+      const clusterHit = pointHits.find(f => f.properties && f.properties.point_count);
+      if (clusterHit) {
+        try {
+          const leaves = await clusterLeaves(map.getSource("events"), clusterHit.properties.cluster_id, Infinity);
+          await showArticlePanel(leaves);
+        } catch (err) {
+          console.error("clusterLeaves error:", err);
+        }
+      } else {
+        await showArticlePanel(pointHits);
+      }
+      return;
+    }
 
-  map.on("click", "unclustered-point", async e => { e.originalEvent.stopPropagation(); await showArticlePanel(e.features); });
-  map.on("click", "events-raw-point",  async e => { e.originalEvent.stopPropagation(); await showArticlePanel(e.features); });
+    if (viewMode === "activity" && eventsVisible) {
+      const openedEvent = await openNearestEventArticles(e.point);
+      if (openedEvent) return;
+    }
+
+    const countryHits = map.queryRenderedFeatures(e.point, { layers: ["country-fills"] });
+    if (!countryHits.length) return;
+    const props = countryHits[0].properties;
+    const iso3  = props.iso_3166_1_alpha_3;
+    const name  = props.name_en || iso3;
+
+    const geo = countryHits[0].geometry;
+    const b   = countryBoundsMap[iso3] || new mapboxgl.LngLatBounds();
+    (geo.type === "Polygon" ? [geo.coordinates] : geo.coordinates)
+      .forEach(poly => poly[0].forEach(c => b.extend(c)));
+    countryBoundsMap[iso3] = b;
+
+    if (viewMode === "political") {
+      tsCountryBounds = b;
+      showTimeSeries(iso3, name);
+      return;
+    }
+    showArticlesForCountry(iso3, name);
+    map.fitBounds(b, { padding: 40, maxZoom: 5, duration: 1000 });
+  });
 
   for (const layer of ["clusters","unclustered-point","events-raw-point"]) {
     map.on("mouseenter", layer, () => { map.getCanvas().style.cursor = "pointer"; });
@@ -482,7 +536,15 @@ map.on("load", async () => {
 
   document.getElementById("locateBtn").addEventListener("click",  locateUser);
   document.getElementById("zoomOutBtn").addEventListener("click", () => {
-    map.flyTo({ center: [10, 20], zoom: 1.2, essential: true });
+    map.easeTo({
+      center: [10, 20],
+      zoom: 1.2,
+      bearing: 0,
+      pitch: 0,
+      duration: 900,
+      essential: true,
+      padding: 0
+    });
   });
 
   document.getElementById("btnGoldstein").addEventListener("click", async () => {

@@ -53,6 +53,7 @@ let hoveredCountryId = null;
 let userLocationMarker = null;
 
 let allPointsForDay  = [];
+let loadedPointsPeriodKey = "";
 let activeCats       = new Set(CATEGORIES.map(c => c.id));
 let eventsVisible    = true;
 let eventRenderMode  = "standard";

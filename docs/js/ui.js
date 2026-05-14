@@ -368,10 +368,11 @@ async function searchArticles() {
   const indexes = await Promise.all(dayKeys.map(loadSummaryIndex));
   const merged  = Object.assign({}, ...indexes);
 
-  if (currentMode !== "daily" && !allPointsForDay.length) {
+  if (loadedPointsPeriodKey !== periodKey) {
     beginLoadingNow();
     try {
       allPointsForDay = await loadSelectionPoints(currentMode, periodKey);
+      loadedPointsPeriodKey = periodKey;
     } finally {
       endLoading();
     }
@@ -512,10 +513,11 @@ function setupCountrySearch() {
 async function showArticlesForCountry(iso3, name) {
   const periodKey = currentSelectionPeriodKey();
   if (!periodKey) return;
-  if (currentMode !== "daily" && !allPointsForDay.length) {
+  if (loadedPointsPeriodKey !== periodKey) {
     beginLoadingNow();
     try {
       allPointsForDay = await loadSelectionPoints(currentMode, periodKey);
+      loadedPointsPeriodKey = periodKey;
     } finally {
       endLoading();
     }
