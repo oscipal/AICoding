@@ -210,7 +210,7 @@ function clusterLeaves(source, clusterId, limit) {
 
 // ── Map load ──────────────────────────────────────────────────────
 map.on("load", async () => {
-  const datesRes = await fetch("./mb_data/dates.json");
+  const datesRes = await fetch("https://pub-30012b0655ec4874a5c6fa4ffac66389.r2.dev/mb_data/dates.json");
   if (!datesRes.ok) throw new Error("Cannot load dates.json");
   availableDays = await datesRes.json();
 
