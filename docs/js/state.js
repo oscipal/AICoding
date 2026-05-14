@@ -64,6 +64,9 @@ const pointsCache       = {};
 const goldsteinCache    = {};
 const summaryIndexCache = {};
 const periodPointsCache  = { weekly: {}, monthly: {} };
+const periodPointsPromiseCache = { weekly: {}, monthly: {} };
+let sliderRenderTimer = null;
+let selectionRenderToken = 0;
 
 let tsChart         = null;
 let tsCountryBounds = null;

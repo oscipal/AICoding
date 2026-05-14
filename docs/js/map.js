@@ -41,29 +41,46 @@ function applyPointFilter() {
     ? allPointsForDay
     : allPointsForDay.filter(f => activeCats.has(featureCategory(f.properties)));
 
-  map.getSource("events").setData({ type: "FeatureCollection", features: filtered });
-  map.getSource("events-raw").setData({ type: "FeatureCollection", features: filtered });
+  const featureCollection = { type: "FeatureCollection", features: filtered };
+  map.getSource("events").setData(featureCollection);
+  map.getSource("events-raw").setData(featureCollection);
   document.getElementById("eventsCount").textContent =
     `Showing ${filtered.length.toLocaleString()} of ${allPointsForDay.length.toLocaleString()} events`;
+  updateSummaryCount(filtered);
+  updateEventLayerVisibility();
+}
 
+function updateSummaryCount(features = allPointsForDay) {
   const cachedMerged = Object.assign({}, ...Object.values(summaryIndexCache));
-  if (Object.keys(cachedMerged).length > 0) {
-    const total = filtered.length;
-    const summarized = filtered.filter(f => {
-      const e = cachedMerged[f.properties.url];
-      if (!e) return false;
-      const badTitle   = !e.title   || e.title   === "No title found"    || e.title   === "Failed to extract title";
-      const badSummary = !e.summary || e.summary  === "No summary found"  || e.summary.startsWith("Failed to summarize");
-      return !badTitle && !badSummary;
-    }).length;
-    const pct = total > 0 ? Math.round(summarized / total * 100) : 0;
-    document.getElementById("summaryCount").textContent =
-      `${summarized.toLocaleString()} of ${total.toLocaleString()} summarized (${pct}%)`;
-  } else {
+  if (Object.keys(cachedMerged).length === 0 || !features.length) {
     document.getElementById("summaryCount").textContent = "";
+    return;
   }
 
-  updateEventLayerVisibility();
+  const total = features.length;
+  const summarized = features.filter(f => {
+    const e = cachedMerged[f.properties.url];
+    if (!e) return false;
+    const badTitle   = !e.title   || e.title   === "No title found"    || e.title   === "Failed to extract title";
+    const badSummary = !e.summary || e.summary  === "No summary found"  || e.summary.startsWith("Failed to summarize");
+    return !badTitle && !badSummary;
+  }).length;
+  const pct = total > 0 ? Math.round(summarized / total * 100) : 0;
+  document.getElementById("summaryCount").textContent =
+    `${summarized.toLocaleString()} of ${total.toLocaleString()} summarized (${pct}%)`;
+}
+
+function clearEventLayers(message = "") {
+  if (!map.getSource("events") || !map.getSource("events-raw")) return;
+  const empty = { type: "FeatureCollection", features: [] };
+  map.getSource("events").setData(empty);
+  map.getSource("events-raw").setData(empty);
+  document.getElementById("eventsCount").textContent = message;
+  document.getElementById("summaryCount").textContent = "";
+  const origins = document.getElementById("mediaOrigins");
+  const originsTitle = document.getElementById("mediaOriginsTitle");
+  if (origins) origins.style.display = "none";
+  if (originsTitle) originsTitle.style.display = "none";
 }
 
 // ── Choropleth rendering ──────────────────────────────────────────
@@ -74,17 +91,20 @@ function renderChoropleth(rows, label) {
   renderMostActive();
 }
 
-async function renderSelectionByIndex(index) {
-  const showLoading = currentMode === "monthly";
+async function renderSelectionByIndex(index, token = null, forceLoading = null) {
+  const showLoading = forceLoading === null ? currentMode === "monthly" : forceLoading;
+  const myToken = token === null ? ++selectionRenderToken : token;
   if (showLoading) beginLoadingNow();
   try {
     const periodKey = availablePeriods[index];
     if (!periodKey) return;
+    if (myToken !== selectionRenderToken) return;
 
     if (viewMode === "political") {
       let gsData = currentMode === "daily"
         ? await loadGoldstein(periodKey)
         : await buildGoldsteinAggregate(currentMode, periodKey);
+      if (myToken !== selectionRenderToken) return;
       goldsteinByIso = makeGoldsteinLookup(gsData);
 
       let fillExpression, label;
@@ -119,41 +139,78 @@ async function renderSelectionByIndex(index) {
           getRowsForSelection(currentMode, periodKey),
           loadPoints(periodKey),
         ]);
+        if (myToken !== selectionRenderToken) return;
         allPointsForDay = geojson.features;
         renderChoropleth(mergeActivityRowsWithPointLocations(rows, allPointsForDay), label);
         applyPointFilter();
         updateEventLayerVisibility();
         renderMediaOrigins();
-        Promise.all([periodKey].map(loadSummaryIndex)).then(() => applyPointFilter());
+        Promise.all([periodKey].map(loadSummaryIndex)).then(() => updateSummaryCount());
         return;
       }
 
       currentDayKey = "";
-      const cacheBucket = currentMode === "weekly" ? periodPointsCache.weekly : periodPointsCache.monthly;
-      const matchingDays = availableDays.filter(d =>
-        currentMode === "weekly" ? getWeekKey(d) === periodKey : getMonthKey(d) === periodKey
-      );
-      const rowsPromise = getRowsForSelection(currentMode, periodKey);
-      const pointsPromise = cacheBucket[periodKey]
-        ? Promise.resolve(cacheBucket[periodKey])
-        : Promise.all(matchingDays.map(day => loadPoints(day))).then(dailyGeojson => {
-            const combined = [];
-            for (const geojson of dailyGeojson) combined.push(...(geojson.features || []));
-            cacheBucket[periodKey] = combined;
-            return combined;
-          });
-      const summariesPromise = Promise.all(matchingDays.map(loadSummaryIndex));
-      const [rows, points] = await Promise.all([rowsPromise, pointsPromise]);
+      const [rows, points] = await Promise.all([
+        getRowsForSelection(currentMode, periodKey),
+        loadSelectionPoints(currentMode, periodKey)
+      ]);
+      if (myToken !== selectionRenderToken) return;
       allPointsForDay = points;
       renderChoropleth(mergeActivityRowsWithPointLocations(rows, allPointsForDay), label);
       applyPointFilter();
       updateEventLayerVisibility();
       renderMediaOrigins();
-      summariesPromise.then(() => applyPointFilter());
+      Promise.all(availableDays.filter(d =>
+        currentMode === "weekly" ? getWeekKey(d) === periodKey : getMonthKey(d) === periodKey
+      ).map(loadSummaryIndex)).then(() => updateSummaryCount());
     }
   } finally {
     if (showLoading) endLoading();
   }
+}
+
+function scheduleSliderRender(index) {
+  if (sliderRenderTimer !== null) clearTimeout(sliderRenderTimer);
+  const token = ++selectionRenderToken;
+  if (viewMode === "activity" && map.getSource("events")) {
+    clearEventLayers("Updating selection...");
+  }
+  previewSelectionByIndex(index, token);
+  sliderRenderTimer = setTimeout(() => {
+    sliderRenderTimer = null;
+    renderSelectionByIndex(index, token, true);
+  }, 1000);
+}
+
+async function previewSelectionByIndex(index, token = null) {
+  const myToken = token === null ? ++selectionRenderToken : token;
+  const periodKey = availablePeriods[index];
+  if (!periodKey) return;
+
+  const label = formatPeriodLabel(currentMode, periodKey);
+  document.getElementById("dateLabel").textContent = label;
+
+  if (viewMode === "political") {
+    const gsData = currentMode === "daily"
+      ? await loadGoldstein(periodKey)
+      : await buildGoldsteinAggregate(currentMode, periodKey);
+    if (myToken !== selectionRenderToken) return;
+    goldsteinByIso = makeGoldsteinLookup(gsData);
+    const fillExpression = politicalSubMode === "tone"
+      ? buildToneExpression(gsData)
+      : buildGoldsteinExpression(gsData);
+    map.setPaintProperty("country-fills", "fill-color", fillExpression);
+    renderMostActive();
+    return;
+  }
+
+  if (!map.getSource("events")) return;
+
+  const rows = await getRowsForSelection(currentMode, periodKey);
+  if (myToken !== selectionRenderToken) return;
+  countByIso = makeCountLookup(rows);
+  map.setPaintProperty("country-fills", "fill-color", buildFillExpression(rows));
+  renderMostActive();
 }
 
 function setActiveButton(mode) {
@@ -408,7 +465,7 @@ map.on("load", async () => {
 
   // ── Button listeners ──────────────────────────────────────────
   document.getElementById("daySlider").addEventListener("input", async e => {
-    await renderSelectionByIndex(Number(e.target.value));
+    scheduleSliderRender(Number(e.target.value));
   });
 
   document.getElementById("btnDaily").addEventListener("click",   () => switchMode("daily"));
