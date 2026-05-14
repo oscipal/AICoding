@@ -33,7 +33,11 @@
           <button id="btnMonthly">Monthly</button>
         </div>
       </div>
-      <input id="daySlider" type="range" min="0" max="0" value="0" step="1" />
+      <div id="sliderRow">
+        <button id="sliderPrevBtn" class="slider-step-btn" type="button" aria-label="Previous period">‹</button>
+        <input id="daySlider" type="range" min="0" max="0" value="0" step="1" />
+        <button id="sliderNextBtn" class="slider-step-btn" type="button" aria-label="Next period">›</button>
+      </div>
       <div id="utilRow">
         <button class="util-btn-sm" id="locateBtn" type="button">📍 My location</button>
         <button class="util-btn-sm" id="zoomOutBtn" type="button">🌍 Zoom out</button>

@@ -184,6 +184,26 @@ function scheduleSliderRender(index) {
   }, 1000);
 }
 
+function stepSlider(delta) {
+  const slider = document.getElementById("daySlider");
+  const max = Number(slider.max) || 0;
+  const next = Math.max(0, Math.min(max, Number(slider.value) + delta));
+  if (next === Number(slider.value)) return;
+  slider.value = String(next);
+  slider.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+function updateSliderStepButtons() {
+  const slider = document.getElementById("daySlider");
+  const prevBtn = document.getElementById("sliderPrevBtn");
+  const nextBtn = document.getElementById("sliderNextBtn");
+  if (!slider || !prevBtn || !nextBtn) return;
+  const value = Number(slider.value) || 0;
+  const max = Number(slider.max) || 0;
+  prevBtn.disabled = value <= 0;
+  nextBtn.disabled = value >= max;
+}
+
 async function openNearestEventArticles(point) {
   const periodKey = currentSelectionPeriodKey();
   if (!periodKey) return false;
@@ -245,9 +265,15 @@ async function previewSelectionByIndex(index, token = null) {
   if (!map.getSource("events")) return;
 
   const rows = await getRowsForSelection(currentMode, periodKey);
+  const points = currentMode === "daily"
+    ? await loadPoints(periodKey)
+    : await loadSelectionPoints(currentMode, periodKey);
   if (myToken !== selectionRenderToken) return;
   countByIso = makeCountLookup(rows);
   map.setPaintProperty("country-fills", "fill-color", buildFillExpression(rows));
+  allPointsForDay = currentMode === "daily" ? (points.features || []) : points;
+  loadedPointsPeriodKey = periodKey;
+  applyPointFilter();
   renderMostActive();
 }
 
@@ -265,6 +291,7 @@ async function switchMode(mode, targetIndex = null) {
   slider.min   = 0;
   slider.max   = Math.max(availablePeriods.length - 1, 0);
   slider.value = targetIndex === null ? slider.max : Math.max(Math.min(targetIndex, slider.max), 0);
+  updateSliderStepButtons();
   await renderSelectionByIndex(Number(slider.value));
 }
 
@@ -520,7 +547,10 @@ map.on("load", async () => {
   // ── Button listeners ──────────────────────────────────────────
   document.getElementById("daySlider").addEventListener("input", async e => {
     scheduleSliderRender(Number(e.target.value));
+    updateSliderStepButtons();
   });
+  document.getElementById("sliderPrevBtn").addEventListener("click", () => stepSlider(-1));
+  document.getElementById("sliderNextBtn").addEventListener("click", () => stepSlider(1));
 
   document.getElementById("btnDaily").addEventListener("click",   () => switchMode("daily"));
   document.getElementById("btnWeekly").addEventListener("click",  () => switchMode("weekly"));
