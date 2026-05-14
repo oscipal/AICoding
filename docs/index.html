@@ -19,7 +19,14 @@
     <!-- Always visible: time slider section -->
     <div id="sliderSection">
       <div id="sliderTopRow">
-        <span id="dateLabel">Loading…</span>
+        <div id="dateHeaderRow">
+          <span id="dateLabel">Loading...</span>
+          <button id="datePickerBtn" type="button" title="Pick date" aria-label="Pick date">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M7 2v2H5a2 2 0 0 0-2 2v2h18V6a2 2 0 0 0-2-2h-2V2h-2v2H9V2H7zm14 8H3v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V10zm-12 4h4v4H9v-4z"/>
+            </svg>
+          </button>
+        </div>
         <div id="modeButtons">
           <button id="btnDaily" class="active">Daily</button>
           <button id="btnWeekly">Weekly</button>
@@ -50,7 +57,7 @@
         <input type="checkbox" id="showEvents" checked>
         <label for="showEvents">Show events</label>
       </div>
-      <div id="eventsCount">Loading…</div>
+      <div id="eventsCount">Loading...</div>
       <div id="summaryCount"></div>
     </div>
 
@@ -105,7 +112,7 @@
       <div class="section-title" id="mostActiveTitle">Most Active</div>
       <div id="mostActive"></div>
       <div class="section-title" id="mediaOriginsTitle" style="margin-top:10px">Media Origins</div>
-      <div id="mediaOrigins"><div style="font-size:11px;color:#999">Loading…</div></div>
+      <div id="mediaOrigins"><div style="font-size:11px;color:#999">Loading...</div></div>
     </div>
 
   </div>
@@ -168,6 +175,9 @@
           <li><span class="cat-dot" style="background:#a50026"></span> &lt; −6 — highly destabilizing</li>
         </ul>
 
+        <h3>News activity coloring</h3>
+        <p>In <strong>News Activity</strong>, countries are colored by how many articles are associated with them in the current period. The scale is logarithmic so very active countries do not overwhelm the map. Lighter blues mean fewer articles, and warmer colors mean more articles.</p>
+
         <h3>Media tone</h3>
         <p>The <strong>Tone</strong> sub-mode colors countries by the average media sentiment of
         articles in which that country appears as the initiating actor. Tone is derived from
@@ -197,6 +207,34 @@
           Data provided by the <a href="https://www.gdeltproject.org/" target="_blank" rel="noopener" style="color:#1f6feb">GDELT Project</a>
           under <a href="https://creativecommons.org/licenses/by/3.0/" target="_blank" rel="noopener" style="color:#1f6feb">CC BY 3.0</a>.
         </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Date picker modal -->
+  <div id="datePickerOverlay">
+    <div id="datePickerModal">
+      <div id="datePickerHeader">
+        <div>
+          <h2>Pick a date</h2>
+          <p>Choose a day, week, or month and jump directly to it.</p>
+        </div>
+        <button id="datePickerClose" type="button" aria-label="Close date picker">x</button>
+      </div>
+      <div id="datePickerBody">
+        <div id="datePickerModes">
+          <button type="button" class="picker-mode-btn active" data-mode="daily">Daily</button>
+          <button type="button" class="picker-mode-btn" data-mode="weekly">Weekly</button>
+          <button type="button" class="picker-mode-btn" data-mode="monthly">Monthly</button>
+        </div>
+        <label class="picker-field" for="datePickerInput">
+          <span>Date</span>
+          <input id="datePickerInput" type="date">
+        </label>
+        <div id="datePickerActions">
+          <button id="datePickerCancel" type="button">Cancel</button>
+          <button id="datePickerGo" type="button" class="primary">Go</button>
+        </div>
       </div>
     </div>
   </div>

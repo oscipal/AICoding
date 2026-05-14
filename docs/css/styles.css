@@ -32,6 +32,14 @@ html, body {
   gap: 4px;
 }
 
+#dateHeaderRow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+}
+
 #dateLabel {
   font-weight: 600;
   font-size: 13px;
@@ -39,6 +47,26 @@ html, body {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+#datePickerBtn {
+  width: 24px;
+  height: 24px;
+  border: 1px solid #cfcfcf;
+  background: white;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #4b4b4b;
+  flex-shrink: 0;
+}
+#datePickerBtn svg {
+  width: 13px;
+  height: 13px;
+  fill: currentColor;
+}
+#datePickerBtn:hover { background: #f4f7fb; color: #1f6feb; }
 
 #modeButtons {
   display: flex;
@@ -378,6 +406,108 @@ html, body {
 #infoModalClose:hover { color: #333; }
 .info-divider { border: none; border-top: 1px solid #eee; margin: 16px 0 0; }
 
+/* Date picker modal */
+#datePickerOverlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.28);
+  z-index: 19;
+  display: none;
+  align-items: center;
+  justify-content: center;
+}
+#datePickerOverlay.visible { display: flex; }
+#datePickerModal {
+  background: white;
+  border-radius: 10px;
+  width: 360px;
+  max-width: calc(100vw - 32px);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+  display: flex;
+  flex-direction: column;
+}
+#datePickerHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 20px 12px;
+  border-bottom: 1px solid #eee;
+}
+#datePickerHeader h2 {
+  font-size: 15px;
+  margin: 0 0 3px;
+}
+#datePickerHeader p {
+  margin: 0;
+  color: #666;
+  font-size: 11px;
+  line-height: 1.45;
+}
+#datePickerClose {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 22px;
+  color: #888;
+  line-height: 1;
+  flex-shrink: 0;
+}
+#datePickerBody {
+  padding: 14px 20px 18px;
+}
+#datePickerModes {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.picker-mode-btn {
+  flex: 1;
+  border: 1px solid #ccc;
+  background: white;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 11px;
+}
+.picker-mode-btn.active {
+  background: #1f6feb;
+  color: white;
+  border-color: #1f6feb;
+}
+.picker-field {
+  display: grid;
+  gap: 5px;
+  font-size: 11px;
+  color: #666;
+}
+.picker-field input {
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  padding: 7px 8px;
+  font-size: 12px;
+}
+#datePickerActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+}
+#datePickerActions button {
+  border: 1px solid #ccc;
+  background: white;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 11px;
+}
+#datePickerActions button.primary {
+  background: #1f6feb;
+  color: white;
+  border-color: #1f6feb;
+}
+#datePickerActions button:hover { background: #f4f7fb; }
+#datePickerActions button.primary:hover { background: #1857b3; }
+
 /* ── Time series panel ───────────────────────────────────────────── */
 #tsPanel {
   position: absolute; bottom: 0; left: 0; right: 0; height: 230px;
@@ -425,4 +555,5 @@ html, body {
   #modeButtons button { padding: 5px 8px; font-size: 12px; }
   .cat-btn { padding: 5px 10px; font-size: 12px; }
   #daySlider { height: 28px; }
+  #datePickerModal { width: calc(100vw - 28px); }
 }

@@ -117,15 +117,19 @@ async function renderSelectionByIndex(index) {
       allPointsForDay = geojson.features;
     } else {
       currentDayKey = "";
-      const matchingDays = availableDays.filter(d =>
-        currentMode === "weekly" ? getWeekKey(d) === periodKey : getMonthKey(d) === periodKey
-      );
-      const combined = [];
-      for (const day of matchingDays) {
-        const geojson = await loadPoints(day);
-        combined.push(...geojson.features);
+      const cacheBucket = currentMode === "weekly" ? periodPointsCache.weekly : periodPointsCache.monthly;
+      if (cacheBucket[periodKey]) {
+        allPointsForDay = cacheBucket[periodKey];
+      } else {
+        const matchingDays = availableDays.filter(d =>
+          currentMode === "weekly" ? getWeekKey(d) === periodKey : getMonthKey(d) === periodKey
+        );
+        const dailyGeojson = await Promise.all(matchingDays.map(day => loadPoints(day)));
+        const combined = [];
+        for (const geojson of dailyGeojson) combined.push(...(geojson.features || []));
+        cacheBucket[periodKey] = combined;
+        allPointsForDay = combined;
       }
-      allPointsForDay = combined;
     }
     renderChoropleth(mergeActivityRowsWithPointLocations(rows, allPointsForDay), label);
     applyPointFilter();
@@ -147,14 +151,14 @@ function setActiveButton(mode) {
   document.getElementById("btnMonthly").classList.toggle("active", mode === "monthly");
 }
 
-async function switchMode(mode) {
+async function switchMode(mode, targetIndex = null) {
   currentMode = mode;
   setActiveButton(mode);
   availablePeriods = computeAvailablePeriods(mode);
   const slider = document.getElementById("daySlider");
   slider.min   = 0;
   slider.max   = Math.max(availablePeriods.length - 1, 0);
-  slider.value = slider.max;
+  slider.value = targetIndex === null ? slider.max : Math.max(Math.min(targetIndex, slider.max), 0);
   await renderSelectionByIndex(Number(slider.value));
 }
 
@@ -395,6 +399,20 @@ map.on("load", async () => {
   document.getElementById("btnDaily").addEventListener("click",   () => switchMode("daily"));
   document.getElementById("btnWeekly").addEventListener("click",  () => switchMode("weekly"));
   document.getElementById("btnMonthly").addEventListener("click", () => switchMode("monthly"));
+  document.getElementById("datePickerBtn").addEventListener("click", openDatePicker);
+  document.getElementById("datePickerClose").addEventListener("click", closeDatePicker);
+  document.getElementById("datePickerCancel").addEventListener("click", closeDatePicker);
+  document.getElementById("datePickerGo").addEventListener("click", applyDatePickerSelection);
+  document.getElementById("datePickerOverlay").addEventListener("click", e => {
+    if (e.target === document.getElementById("datePickerOverlay")) closeDatePicker();
+  });
+  document.querySelectorAll(".picker-mode-btn").forEach(btn => {
+    btn.addEventListener("click", () => setDatePickerMode(btn.dataset.mode));
+  });
+  document.getElementById("datePickerInput").addEventListener("keydown", e => {
+    if (e.key === "Enter") applyDatePickerSelection();
+    if (e.key === "Escape") closeDatePicker();
+  });
 
   document.getElementById("locateBtn").addEventListener("click",  locateUser);
   document.getElementById("zoomOutBtn").addEventListener("click", () => {
