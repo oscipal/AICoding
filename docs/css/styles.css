@@ -4,6 +4,16 @@ html, body {
   font-size: 13px;
 }
 #map { width: 100%; height: 100vh; }
+body.loading #controls,
+body.loading #map {
+  pointer-events: none;
+}
+body.loading {
+  cursor: wait;
+}
+body.loading #loadingIndicator {
+  pointer-events: auto;
+}
 
 /* ── Controls panel ──────────────────────────────────────────────── */
 #controls {
@@ -420,7 +430,7 @@ html, body {
 #datePickerModal {
   background: white;
   border-radius: 10px;
-  width: 360px;
+  width: 420px;
   max-width: calc(100vw - 32px);
   box-shadow: 0 8px 32px rgba(0,0,0,0.25);
   display: flex;
@@ -453,62 +463,220 @@ html, body {
   flex-shrink: 0;
 }
 #datePickerBody {
-  padding: 14px 20px 18px;
+  padding: 14px 16px 18px;
 }
-#datePickerModes {
+#datePickerCalendar {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+#datePickerMonthBar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+#datePickerModeBar {
   display: flex;
   gap: 6px;
-  margin-bottom: 12px;
+  justify-content: stretch;
 }
-.picker-mode-btn {
+#datePickerModeBar button {
+  flex: 1 1 0;
+  border: 1px solid #d7c6ff;
+  background: #f7f2ff;
+  color: #6b4fa3;
+  border-radius: 6px;
+  cursor: pointer;
+  height: 28px;
+  padding: 0 10px;
+  font-size: 11px;
+  font-weight: 700;
+}
+#datePickerModeBar button:hover {
+  background: #efe5ff;
+}
+#datePickerModeBar button.active {
+  background: #6b4fa3;
+  border-color: #6b4fa3;
+  color: white;
+}
+#datePickerMonthBar button {
+  border: 1px solid #d3d3d3;
+  background: white;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  color: #444;
+  height: 30px;
+}
+#datePickerPrevMonth,
+#datePickerNextMonth {
+  width: 32px;
+  flex: 0 0 32px;
+}
+#datePickerMonthLabel {
   flex: 1;
-  border: 1px solid #ccc;
-  background: white;
-  padding: 6px 8px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 11px;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+  padding: 0 10px;
 }
-.picker-mode-btn.active {
-  background: #1f6feb;
-  color: white;
-  border-color: #1f6feb;
+#datePickerMonthLabel:hover,
+#datePickerMonthBar button:hover {
+  background: #f4f7fb;
 }
-.picker-field {
+#datePickerWeekdays {
   display: grid;
-  gap: 5px;
-  font-size: 11px;
-  color: #666;
+  grid-template-columns: 48px repeat(7, 1fr);
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #777;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
-.picker-field input {
-  border: 1px solid #ccc;
-  border-radius: 6px;
-  padding: 7px 8px;
-  font-size: 12px;
+#datePickerWeekdays .date-picker-weekday-spacer {
+  min-height: 1px;
+  display: block;
 }
-#datePickerActions {
+#datePickerWeeks {
   display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-top: 14px;
+  flex-direction: column;
+  gap: 4px;
 }
-#datePickerActions button {
-  border: 1px solid #ccc;
+.date-picker-week {
+  display: grid;
+  grid-template-columns: 48px repeat(7, 1fr);
+  gap: 4px;
+}
+.date-picker-week-btn,
+.date-picker-day-btn {
+  border: 1px solid #d6d6d6;
   background: white;
-  padding: 6px 10px;
   border-radius: 6px;
   cursor: pointer;
+  min-height: 30px;
   font-size: 11px;
+  color: #333;
 }
-#datePickerActions button.primary {
-  background: #1f6feb;
-  color: white;
+.date-picker-week-btn {
+  padding: 0 6px;
+  font-weight: 700;
+  color: #6b4fa3;
+  background: #f7f2ff;
+}
+.date-picker-week-btn:hover,
+.date-picker-day-btn:hover,
+.date-picker-month-link:hover {
+  background: #f4f7fb;
+}
+.date-picker-day-btn {
+  padding: 0;
+}
+.date-picker-day-btn.empty {
+  border-color: transparent;
+  background: transparent;
+  cursor: default;
+}
+.date-picker-day-btn.outside {
+  color: #aaa;
+  background: #fafafa;
+}
+.date-picker-day-btn:disabled {
+  cursor: default;
+  color: #bbb;
+  background: #f8f8f8;
+}
+.date-picker-day-btn.active-day {
   border-color: #1f6feb;
+  background: #e8f0ff;
+  color: #1f6feb;
+  font-weight: 700;
 }
-#datePickerActions button:hover { background: #f4f7fb; }
-#datePickerActions button.primary:hover { background: #1857b3; }
+.date-picker-day-btn.active-period {
+  box-shadow: inset 0 0 0 1px rgba(31,111,235,0.45);
+}
+.date-picker-week-btn.active-week {
+  background: #efe5ff;
+  border-color: #8f6bd8;
+  color: #5a3ea1;
+}
+.date-picker-month-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.date-picker-month-btn {
+  border: 1px solid #d6d6d6;
+  background: white;
+  border-radius: 8px;
+  min-height: 48px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  color: #4f4f4f;
+}
+.date-picker-month-btn.active-month {
+  border-color: #1f6feb;
+  background: #e8f0ff;
+  color: #1f6feb;
+}
+.date-picker-year-weeks-grid {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 6px;
+}
+.date-picker-day-btn.today {
+  border-color: #8f6bd8;
+}
+.date-picker-month-link {
+  border: 1px solid #d6d6d6;
+  background: #f7f2ff;
+  color: #6b4fa3;
+  border-radius: 6px;
+  cursor: pointer;
+  min-height: 30px;
+  font-size: 11px;
+  font-weight: 700;
+}
+.date-picker-month-link.active-month {
+  border-color: #1f6feb;
+  background: #e8f0ff;
+  color: #1f6feb;
+}
 
 /* ── Time series panel ───────────────────────────────────────────── */
+#loadingIndicator {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255,255,255,0.42);
+  backdrop-filter: blur(1px);
+  pointer-events: auto;
+}
+#loadingIndicator.visible {
+  display: flex;
+}
+.loading-spinner {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: 4px solid rgba(107,79,163,0.18);
+  border-top-color: #6b4fa3;
+  border-right-color: #6b4fa3;
+  animation: loading-spin 0.8s linear infinite;
+}
+@keyframes loading-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 #tsPanel {
   position: absolute; bottom: 0; left: 0; right: 0; height: 230px;
   background: rgba(255,255,255,0.97); border-top: 1px solid #ddd;
@@ -556,4 +724,7 @@ html, body {
   .cat-btn { padding: 5px 10px; font-size: 12px; }
   #daySlider { height: 28px; }
   #datePickerModal { width: calc(100vw - 28px); }
+  .date-picker-week { grid-template-columns: 42px repeat(7, 1fr); }
+  .date-picker-year-weeks-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .loading-spinner { width: 34px; height: 34px; border-width: 3px; }
 }

@@ -67,6 +67,45 @@ const periodPointsCache  = { weekly: {}, monthly: {} };
 
 let tsChart         = null;
 let tsCountryBounds = null;
+let loadingCount    = 0;
+let loadingTimer    = null;
+
+function setLoadingVisible(visible) {
+  const el = document.getElementById("loadingIndicator");
+  if (!el) return;
+  el.classList.toggle("visible", visible);
+  document.body.classList.toggle("loading", visible);
+}
+
+function beginLoading() {
+  loadingCount += 1;
+  if (loadingCount === 1 && loadingTimer === null) {
+    loadingTimer = setTimeout(() => {
+      loadingTimer = null;
+      if (loadingCount > 0) setLoadingVisible(true);
+    }, 2000);
+  }
+}
+
+function beginLoadingNow() {
+  loadingCount += 1;
+  if (loadingTimer !== null) {
+    clearTimeout(loadingTimer);
+    loadingTimer = null;
+  }
+  setLoadingVisible(true);
+}
+
+function endLoading() {
+  loadingCount = Math.max(0, loadingCount - 1);
+  if (loadingCount === 0) {
+    if (loadingTimer !== null) {
+      clearTimeout(loadingTimer);
+      loadingTimer = null;
+    }
+    setLoadingVisible(false);
+  }
+}
 
 // ── Color scales ─────────────────────────────────────────────────
 function colorForCount(count) {

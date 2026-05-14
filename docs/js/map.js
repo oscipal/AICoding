@@ -75,73 +75,84 @@ function renderChoropleth(rows, label) {
 }
 
 async function renderSelectionByIndex(index) {
-  const periodKey = availablePeriods[index];
-  if (!periodKey) return;
+  const showLoading = currentMode === "monthly";
+  if (showLoading) beginLoadingNow();
+  try {
+    const periodKey = availablePeriods[index];
+    if (!periodKey) return;
 
-  if (viewMode === "political") {
-    let gsData = currentMode === "daily"
-      ? await loadGoldstein(periodKey)
-      : await buildGoldsteinAggregate(currentMode, periodKey);
-    goldsteinByIso = makeGoldsteinLookup(gsData);
+    if (viewMode === "political") {
+      let gsData = currentMode === "daily"
+        ? await loadGoldstein(periodKey)
+        : await buildGoldsteinAggregate(currentMode, periodKey);
+      goldsteinByIso = makeGoldsteinLookup(gsData);
 
-    let fillExpression, label;
-    if (politicalSubMode === "tone") {
-      fillExpression = buildToneExpression(gsData);
-    } else {
-      fillExpression = buildGoldsteinExpression(gsData);
+      let fillExpression, label;
+      if (politicalSubMode === "tone") {
+        fillExpression = buildToneExpression(gsData);
+      } else {
+        fillExpression = buildGoldsteinExpression(gsData);
+      }
+      label = formatPeriodLabel(currentMode, periodKey);
+      document.getElementById("dateLabel").textContent = label;
+      map.setPaintProperty("country-fills", "fill-color", fillExpression);
+
+      if (map.getSource("events")) {
+        map.getSource("events").setData({ type: "FeatureCollection", features: [] });
+        map.getSource("events-raw").setData({ type: "FeatureCollection", features: [] });
+        document.getElementById("eventsCount").textContent = "Not shown in Political Landscape mode";
+        updateEventLayerVisibility();
+      }
+      currentDayKey = periodKey;
+      renderMostActive();
+      renderMediaOrigins();
+      return;
     }
-    label = formatPeriodLabel(currentMode, periodKey);
-    document.getElementById("dateLabel").textContent = label;
-    map.setPaintProperty("country-fills", "fill-color", fillExpression);
+
+    // Activity mode
+    const label = formatPeriodLabel(currentMode, periodKey);
 
     if (map.getSource("events")) {
-      map.getSource("events").setData({ type: "FeatureCollection", features: [] });
-      map.getSource("events-raw").setData({ type: "FeatureCollection", features: [] });
-      document.getElementById("eventsCount").textContent = "Not shown in Political Landscape mode";
-      updateEventLayerVisibility();
-    }
-    currentDayKey = periodKey;
-    renderMostActive();
-    renderMediaOrigins();
-    return;
-  }
+      if (currentMode === "daily") {
+        currentDayKey = periodKey;
+        const [rows, geojson] = await Promise.all([
+          getRowsForSelection(currentMode, periodKey),
+          loadPoints(periodKey),
+        ]);
+        allPointsForDay = geojson.features;
+        renderChoropleth(mergeActivityRowsWithPointLocations(rows, allPointsForDay), label);
+        applyPointFilter();
+        updateEventLayerVisibility();
+        renderMediaOrigins();
+        Promise.all([periodKey].map(loadSummaryIndex)).then(() => applyPointFilter());
+        return;
+      }
 
-  // Activity mode
-  const rows  = await getRowsForSelection(currentMode, periodKey);
-  const label = formatPeriodLabel(currentMode, periodKey);
-
-  if (map.getSource("events")) {
-    if (currentMode === "daily") {
-      currentDayKey = periodKey;
-      const geojson = await loadPoints(periodKey);
-      allPointsForDay = geojson.features;
-    } else {
       currentDayKey = "";
       const cacheBucket = currentMode === "weekly" ? periodPointsCache.weekly : periodPointsCache.monthly;
-      if (cacheBucket[periodKey]) {
-        allPointsForDay = cacheBucket[periodKey];
-      } else {
-        const matchingDays = availableDays.filter(d =>
-          currentMode === "weekly" ? getWeekKey(d) === periodKey : getMonthKey(d) === periodKey
-        );
-        const dailyGeojson = await Promise.all(matchingDays.map(day => loadPoints(day)));
-        const combined = [];
-        for (const geojson of dailyGeojson) combined.push(...(geojson.features || []));
-        cacheBucket[periodKey] = combined;
-        allPointsForDay = combined;
-      }
+      const matchingDays = availableDays.filter(d =>
+        currentMode === "weekly" ? getWeekKey(d) === periodKey : getMonthKey(d) === periodKey
+      );
+      const rowsPromise = getRowsForSelection(currentMode, periodKey);
+      const pointsPromise = cacheBucket[periodKey]
+        ? Promise.resolve(cacheBucket[periodKey])
+        : Promise.all(matchingDays.map(day => loadPoints(day))).then(dailyGeojson => {
+            const combined = [];
+            for (const geojson of dailyGeojson) combined.push(...(geojson.features || []));
+            cacheBucket[periodKey] = combined;
+            return combined;
+          });
+      const summariesPromise = Promise.all(matchingDays.map(loadSummaryIndex));
+      const [rows, points] = await Promise.all([rowsPromise, pointsPromise]);
+      allPointsForDay = points;
+      renderChoropleth(mergeActivityRowsWithPointLocations(rows, allPointsForDay), label);
+      applyPointFilter();
+      updateEventLayerVisibility();
+      renderMediaOrigins();
+      summariesPromise.then(() => applyPointFilter());
     }
-    renderChoropleth(mergeActivityRowsWithPointLocations(rows, allPointsForDay), label);
-    applyPointFilter();
-    updateEventLayerVisibility();
-    renderMediaOrigins();
-
-    const dayKeys = currentMode === "daily"
-      ? [periodKey]
-      : availableDays.filter(d =>
-          currentMode === "weekly" ? getWeekKey(d) === periodKey : getMonthKey(d) === periodKey
-        );
-    Promise.all(dayKeys.map(loadSummaryIndex)).then(() => applyPointFilter());
+  } finally {
+    if (showLoading) endLoading();
   }
 }
 
@@ -401,16 +412,10 @@ map.on("load", async () => {
   document.getElementById("btnMonthly").addEventListener("click", () => switchMode("monthly"));
   document.getElementById("datePickerBtn").addEventListener("click", openDatePicker);
   document.getElementById("datePickerClose").addEventListener("click", closeDatePicker);
-  document.getElementById("datePickerCancel").addEventListener("click", closeDatePicker);
-  document.getElementById("datePickerGo").addEventListener("click", applyDatePickerSelection);
   document.getElementById("datePickerOverlay").addEventListener("click", e => {
     if (e.target === document.getElementById("datePickerOverlay")) closeDatePicker();
   });
-  document.querySelectorAll(".picker-mode-btn").forEach(btn => {
-    btn.addEventListener("click", () => setDatePickerMode(btn.dataset.mode));
-  });
-  document.getElementById("datePickerInput").addEventListener("keydown", e => {
-    if (e.key === "Enter") applyDatePickerSelection();
+  document.getElementById("datePickerOverlay").addEventListener("keydown", e => {
     if (e.key === "Escape") closeDatePicker();
   });
 
