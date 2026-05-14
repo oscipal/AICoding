@@ -56,6 +56,7 @@ import csv
 import concurrent.futures
 import io
 import json
+import os
 import sys
 import warnings
 import zipfile
@@ -70,6 +71,7 @@ nltk.download('punkt_tab')
 import random
 import time
 
+import boto3
 import requests
 import trafilatura
 import yaml
@@ -97,9 +99,29 @@ GEOJSON_DIR.mkdir(parents=True, exist_ok=True)
 MIN_GEO_TYPE = _cfg["min_geo_type"]
 SUMMARY_WORKERS = max(int(_cfg.get("summary_workers", 16)), 1)
 SUMMARY_REQUEST_TIMEOUT_SEC = max(int(_cfg.get("summary_request_timeout_sec", 15)), 1)
+R2_BUCKET = _cfg.get("r2_bucket", "aicoding")
+R2_ENDPOINT = _cfg.get("r2_endpoint", "https://72405b7b9691671561fbebf8bf845f85.r2.cloudflarestorage.com")
+R2_ACCESS_KEY_ID = os.environ["R2_ACCESS_KEY_ID"]
+R2_SECRET_ACCESS_KEY = os.environ["R2_SECRET_ACCESS_KEY"]
+S3 = boto3.client(
+    "s3",
+    endpoint_url=R2_ENDPOINT,
+    aws_access_key_id=R2_ACCESS_KEY_ID,
+    aws_secret_access_key=R2_SECRET_ACCESS_KEY,
+    region_name="auto",
+)
 
 # Raise CSV field size limit for large GDELT fields
 csv.field_size_limit(10_000_000)
+
+
+def upload_json_to_r2(key: str, data) -> None:
+    S3.put_object(
+        Bucket=R2_BUCKET,
+        Key=key,
+        Body=json.dumps(data, ensure_ascii=False, separators=(",", ":")).encode("utf-8"),
+        ContentType="application/json",
+    )
 
 
 # ── CAMEO root code → category + human-readable label ───────────────────────
@@ -473,6 +495,7 @@ def process_day(day_key, urls, force=False, summary_limit=None, skip_summaries=F
     summary_path = OUTPUT_DIR / f"{day_key}_summaries.json"
     with open(summary_path, "w", encoding="utf-8") as f:
         json.dump(summary_index, f, ensure_ascii=False, separators=(",", ":"))
+    upload_json_to_r2(f"final_data/{day_key}_summaries.json", summary_index)
     print(f"\n  Saved summaries -> {summary_path}  ({summary_path.stat().st_size / 1e6:.1f} MB, {len(summary_index):,} articles)")
 
     # Keep points_data lightweight for fast frontend map loading.
@@ -499,6 +522,7 @@ def process_day(day_key, urls, force=False, summary_limit=None, skip_summaries=F
     points_geojson = {"type": "FeatureCollection", "features": light_features}
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(points_geojson, f, separators=(",", ":"))
+    upload_json_to_r2(f"points_data/{day_key}.geojson", points_geojson)
     print(f"  Saved points   -> {out_path}  ({out_path.stat().st_size / 1e6:.1f} MB)")
 
     # ── Goldstein aggregation per Actor1 country ──────────────────────────────
@@ -536,6 +560,7 @@ def process_day(day_key, urls, force=False, summary_limit=None, skip_summaries=F
     gs_path = GOLDSTEIN_DIR / f"{day_key}.json"
     with open(gs_path, "w", encoding="utf-8") as f:
         json.dump(goldstein_data, f, separators=(",", ":"))
+    upload_json_to_r2(f"goldstein_data/{day_key}.json", goldstein_data)
     print(f"  Saved goldstein -> {gs_path}  ({gs_path.stat().st_size / 1024:.0f} KB, {len(goldstein_data)} countries)")
 
     # ── mb_data: article counts per country (for news activity choropleth) ───
@@ -546,6 +571,7 @@ def process_day(day_key, urls, force=False, summary_limit=None, skip_summaries=F
     mb_path = MB_DATA_DIR / f"{day_key}.json"
     with open(mb_path, "w", encoding="utf-8") as f:
         json.dump(mb_data, f, separators=(",", ":"))
+    upload_json_to_r2(f"mb_data/{day_key}.json", mb_data)
     print(f"  Saved mb_data   -> {mb_path}")
 
 
@@ -630,6 +656,7 @@ def main():
     })
     with open(dates_path, "w") as f:
         json.dump(all_dates, f)
+    upload_json_to_r2("mb_data/dates.json", all_dates)
     print(f"\nUpdated {dates_path}  ({len(all_dates)} dates)")
     print("Done.")
 
