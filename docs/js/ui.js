@@ -26,6 +26,61 @@ function setupViewSelector() {
   });
 }
 
+let datePickerMode = "daily";
+
+function dateValueFromPeriodKey(mode, periodKey) {
+  if (!periodKey) return "";
+  if (mode === "daily") {
+    return `${periodKey.slice(0, 4)}-${periodKey.slice(4, 6)}-${periodKey.slice(6, 8)}`;
+  }
+  const matches = availableDays.filter(d =>
+    mode === "weekly" ? getWeekKey(d) === periodKey : getMonthKey(d) === periodKey
+  );
+  const day = matches[0] || availableDays[0];
+  if (!day) return "";
+  return `${day.slice(0, 4)}-${day.slice(4, 6)}-${day.slice(6, 8)}`;
+}
+
+function periodKeyFromDateValue(mode, value) {
+  if (!value) return "";
+  const dayKey = value.replace(/-/g, "");
+  if (mode === "daily") return dayKey;
+  if (mode === "weekly") return getWeekKey(dayKey);
+  return getMonthKey(dayKey);
+}
+
+function setDatePickerMode(mode) {
+  datePickerMode = mode;
+  document.querySelectorAll(".picker-mode-btn").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.mode === mode);
+  });
+}
+
+function openDatePicker() {
+  const overlay = document.getElementById("datePickerOverlay");
+  const input = document.getElementById("datePickerInput");
+  const slider = document.getElementById("daySlider");
+  const periodKey = availablePeriods[Number(slider.value)] || "";
+  const dateValue = dateValueFromPeriodKey(currentMode, periodKey || currentDayKey);
+  setDatePickerMode(currentMode);
+  input.value = dateValue || new Date().toISOString().slice(0, 10);
+  overlay.classList.add("visible");
+}
+
+function closeDatePicker() {
+  document.getElementById("datePickerOverlay").classList.remove("visible");
+}
+
+async function applyDatePickerSelection() {
+  const input = document.getElementById("datePickerInput");
+  const mode = datePickerMode;
+  const periodKey = periodKeyFromDateValue(mode, input.value);
+  const idx = availablePeriods.indexOf(periodKey);
+  if (idx < 0) return;
+  closeDatePicker();
+  await switchMode(mode, idx);
+}
+
 // ── Keyword search ────────────────────────────────────────────────
 function buildWordList() {
   const words = new Set();

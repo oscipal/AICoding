@@ -63,19 +63,21 @@ const goldsteinAggCache = { weekly: {}, monthly: {} };
 const pointsCache       = {};
 const goldsteinCache    = {};
 const summaryIndexCache = {};
+const periodPointsCache  = { weekly: {}, monthly: {} };
 
 let tsChart         = null;
 let tsCountryBounds = null;
 
 // ── Color scales ─────────────────────────────────────────────────
 function colorForCount(count) {
-  const log = Math.log10(Math.max(Number(count) || 0, 1));
-  if (log > 4) return "#810f7c";
-  if (log > 3) return "#8856a7";
-  if (log > 2) return "#8c96c6";
-  if (log > 1) return "#9ebcda";
-  if ((Number(count) || 0) > 0) return "#edf8fb";
-  return "rgba(0,0,0,0)";
+  const value = Number(count) || 0;
+  const log = Math.log10(Math.max(value, 1));
+  if (value <= 0) return "rgba(0,0,0,0)";
+  if (log > 4) return "#3f007d";
+  if (log > 3) return "#6a51a3";
+  if (log > 2) return "#9e9ac8";
+  if (log > 1) return "#cbc9e2";
+  return "#f2f0f7";
 }
 
 function normalizeIso3(iso3) {
