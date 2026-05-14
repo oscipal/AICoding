@@ -26,9 +26,16 @@ async function loadGoldstein(dayKey) {
 
 async function loadSummaryIndex(dayKey) {
   if (summaryIndexCache[dayKey]) return summaryIndexCache[dayKey];
-  const res = await fetch(`./final_data/${dayKey}_with_summary.geojson`);
-  if (!res.ok) { summaryIndexCache[dayKey] = {}; return {}; }
-  const data = await res.json();
+
+  const compactRes = await fetch(`./final_data/${dayKey}_summaries.json`);
+  if (compactRes.ok) {
+    summaryIndexCache[dayKey] = await compactRes.json();
+    return summaryIndexCache[dayKey];
+  }
+
+  const legacyRes = await fetch(`./final_data/${dayKey}_with_summary.geojson`);
+  if (!legacyRes.ok) { summaryIndexCache[dayKey] = {}; return {}; }
+  const data = await legacyRes.json();
   const idx = {};
   for (const f of data.features || []) {
     const p = f.properties || {};

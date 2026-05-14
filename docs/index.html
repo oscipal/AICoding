@@ -104,7 +104,7 @@
     <div id="bodyStats" class="section-body">
       <div class="section-title" id="mostActiveTitle">Most Active</div>
       <div id="mostActive"></div>
-      <div class="section-title" style="margin-top:10px">Media Origins</div>
+      <div class="section-title" id="mediaOriginsTitle" style="margin-top:10px">Media Origins</div>
       <div id="mediaOrigins"><div style="font-size:11px;color:#999">Loading…</div></div>
     </div>
 
@@ -152,7 +152,12 @@
         <h3>Goldstein scale</h3>
         <p>The <strong>Goldstein</strong> sub-mode colors countries by their weighted average
         Goldstein score — ranging from <strong>−10</strong> (most destabilizing) to
-        <strong>+10</strong> (most cooperative).</p>
+        <strong>+10</strong> (most cooperative). The score comes from the CAMEO event type:
+        negative values describe actions that increase tension, such as threats, coercion,
+        protests, violence, or armed conflict; positive values describe cooperative actions,
+        such as consultations, aid, agreements, mediation, or yielding. A country's displayed
+        value is an event-count-weighted average, so it summarizes the overall direction of
+        reported political interactions, not whether the country itself is good or bad.</p>
         <ul>
           <li><span class="cat-dot" style="background:#1a9641"></span> &gt; +4 — strongly cooperative</li>
           <li><span class="cat-dot" style="background:#a6d96a"></span> +2 to +4 — cooperative</li>
@@ -165,7 +170,12 @@
 
         <h3>Media tone</h3>
         <p>The <strong>Tone</strong> sub-mode colors countries by the average media sentiment of
-        articles in which that country appears as the initiating actor.</p>
+        articles in which that country appears as the initiating actor. Tone is derived from
+        the wording of the source article: higher values mean more positive language, lower
+        values mean more negative language, and values near zero are comparatively neutral.
+        It measures the article's language, not the severity of the political event, so a
+        cooperative event can still have negative tone if the article is written in a critical
+        or crisis-focused way.</p>
         <ul>
           <li><span class="cat-dot" style="background:#1a9641"></span> &gt; +2 — positive coverage</li>
           <li><span class="cat-dot" style="background:#91cf60"></span> 0 to +2 — slightly positive</li>

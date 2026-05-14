@@ -12,6 +12,32 @@ function featureCategory(props) { return props.category || "diplomacy"; }
 
 const HEATMAP_TO_POINTS_ZOOM = 5.5;
 
+const ISO_ALIASES = {
+  ROM: "ROU",
+  KOS: "XKX",
+  XK:  "XKX",
+  BOS: "BIH",
+  MTN: "MNE",
+  SAH: "ESH",
+};
+
+const COUNTRY_NAME_TO_ISO = {
+  "bosnia": "BIH",
+  "bosnia-herzegovina": "BIH",
+  "bosnia and herzegovina": "BIH",
+  "kosovo": "XKX",
+  "montenegro": "MNE",
+  "romania": "ROU",
+  "slovenia": "SVN",
+  "western sahara": "ESH",
+};
+
+const ISO_TO_BOUNDARY_NAMES = {
+  BIH: ["Bosnia and Herzegovina", "Bosnia-Herzegovina"],
+  ESH: ["Western Sahara"],
+  XKX: ["Kosovo"],
+};
+
 // ── Mutable state ─────────────────────────────────────────────────
 let viewMode         = "activity";
 let politicalSubMode = "goldstein";
@@ -44,12 +70,18 @@ let tsCountryBounds = null;
 // ── Color scales ─────────────────────────────────────────────────
 function colorForCount(count) {
   const log = Math.log10(Math.max(Number(count) || 0, 1));
-  if (log > 4) return "#084594";
-  if (log > 3) return "#2171b5";
-  if (log > 2) return "#4292c6";
-  if (log > 1) return "#9ecae1";
-  if ((Number(count) || 0) > 0) return "#6baed6";
+  if (log > 4) return "#810f7c";
+  if (log > 3) return "#8856a7";
+  if (log > 2) return "#8c96c6";
+  if (log > 1) return "#9ebcda";
+  if ((Number(count) || 0) > 0) return "#edf8fb";
   return "rgba(0,0,0,0)";
+}
+
+function normalizeIso3(iso3) {
+  if (!iso3) return "";
+  const code = String(iso3).toUpperCase();
+  return ISO_ALIASES[code] || code;
 }
 
 function colorForGoldstein(score) {
@@ -74,9 +106,14 @@ function colorForTone(score) {
 
 function buildFillExpression(rows) {
   const expr = ["match", ["get", "iso_3166_1_alpha_3"]];
+  const totals = {};
   for (const row of rows) {
-    if (!row.iso3) continue;
-    expr.push(row.iso3, colorForCount(row.count));
+    const iso3 = normalizeIso3(row.iso3);
+    if (!iso3) continue;
+    totals[iso3] = (totals[iso3] || 0) + (Number(row.count) || 0);
+  }
+  for (const [iso3, count] of Object.entries(totals)) {
+    expr.push(iso3, colorForCount(count));
   }
   expr.push("rgba(0,0,0,0)");
   return expr;
@@ -84,9 +121,12 @@ function buildFillExpression(rows) {
 
 function buildGoldsteinExpression(rows) {
   const expr = ["match", ["get", "iso_3166_1_alpha_3"]];
+  const seen = new Set();
   for (const r of rows) {
-    if (!r.iso3) continue;
-    expr.push(r.iso3, colorForGoldstein(r.goldstein));
+    const iso3 = normalizeIso3(r.iso3);
+    if (!iso3 || seen.has(iso3)) continue;
+    seen.add(iso3);
+    expr.push(iso3, colorForGoldstein(r.goldstein));
   }
   expr.push("rgba(0,0,0,0)");
   return expr;
@@ -94,9 +134,12 @@ function buildGoldsteinExpression(rows) {
 
 function buildToneExpression(rows) {
   const expr = ["match", ["get", "iso_3166_1_alpha_3"]];
+  const seen = new Set();
   for (const r of rows) {
-    if (!r.iso3 || r.avg_tone === null || r.avg_tone === undefined) continue;
-    expr.push(r.iso3, colorForTone(r.avg_tone));
+    const iso3 = normalizeIso3(r.iso3);
+    if (!iso3 || seen.has(iso3) || r.avg_tone === null || r.avg_tone === undefined) continue;
+    seen.add(iso3);
+    expr.push(iso3, colorForTone(r.avg_tone));
   }
   expr.push("rgba(0,0,0,0)");
   return expr;
@@ -105,16 +148,60 @@ function buildToneExpression(rows) {
 function makeCountLookup(rows) {
   const lookup = {};
   for (const row of rows) {
-    if (!row.iso3) continue;
-    lookup[row.iso3] = Number(row.count) || 0;
+    const iso3 = normalizeIso3(row.iso3);
+    if (!iso3) continue;
+    lookup[iso3] = (lookup[iso3] || 0) + (Number(row.count) || 0);
   }
   return lookup;
 }
 
 function makeGoldsteinLookup(rows) {
   const lookup = {};
-  for (const r of rows) lookup[r.iso3] = r;
+  for (const r of rows) lookup[normalizeIso3(r.iso3)] = { ...r, iso3: normalizeIso3(r.iso3) };
   return lookup;
+}
+
+function normalizeCountryName(name) {
+  return String(name || "")
+    .toLowerCase()
+    .replace(/\s*\(general\)\s*/g, "")
+    .replace(/^the\s+/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isoForCountryName(name) {
+  const normalized = normalizeCountryName(name);
+  if (!normalized) return "";
+  if (COUNTRY_NAME_TO_ISO[normalized]) return COUNTRY_NAME_TO_ISO[normalized];
+  for (const [iso3, countryName] of Object.entries(countryNameMap)) {
+    if (normalizeCountryName(countryName) === normalized) return normalizeIso3(iso3);
+  }
+  return "";
+}
+
+function countryNameFromLocation(location) {
+  const parts = String(location || "").split(",").map(part => part.trim()).filter(Boolean);
+  return parts.length ? parts[parts.length - 1] : "";
+}
+
+function mergeActivityRowsWithPointLocations(rows, features) {
+  const totals = {};
+  for (const row of rows || []) {
+    const iso3 = normalizeIso3(row.iso3);
+    if (!iso3) continue;
+    totals[iso3] = (totals[iso3] || 0) + (Number(row.count) || 0);
+  }
+  const pointTotals = {};
+  for (const feature of features || []) {
+    const iso3 = isoForCountryName(countryNameFromLocation(feature.properties?.location));
+    if (!iso3) continue;
+    pointTotals[iso3] = (pointTotals[iso3] || 0) + 1;
+  }
+  for (const [iso3, count] of Object.entries(pointTotals)) {
+    totals[iso3] = Math.max(totals[iso3] || 0, count);
+  }
+  return Object.entries(totals).map(([iso3, count]) => ({ iso3, count }));
 }
 
 // ── Date helpers ─────────────────────────────────────────────────
