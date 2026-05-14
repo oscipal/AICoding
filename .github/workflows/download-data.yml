@@ -28,10 +28,13 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install requests pyyaml sumy nltk numpy trafilatura
+          pip install boto3 requests pyyaml sumy nltk numpy trafilatura
           pip install newspaper3k
 
       - name: Download yesterday's GDELT data
+        env:
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
         run: |
           DATE=$(date -u -d "yesterday" +%Y%m%d)
           echo "Downloading data for $DATE"
