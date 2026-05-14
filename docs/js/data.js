@@ -41,6 +41,38 @@ async function loadSummaryIndex(dayKey) {
   return summaryIndexCache[dayKey];
 }
 
+async function loadSelectionPoints(mode, periodKey) {
+  if (mode === "daily") {
+    const daily = await loadPoints(periodKey);
+    return daily.features || [];
+  }
+
+  if (mode !== "weekly" && mode !== "monthly") return [];
+
+  const cacheBucket = periodPointsCache[mode];
+  if (cacheBucket[periodKey]) return cacheBucket[periodKey];
+
+  const promiseBucket = periodPointsPromiseCache[mode];
+  if (promiseBucket[periodKey]) return promiseBucket[periodKey];
+
+  const matching = availableDays.filter(d =>
+    mode === "weekly" ? getWeekKey(d) === periodKey : getMonthKey(d) === periodKey
+  );
+
+  promiseBucket[periodKey] = Promise.all(matching.map(day => loadPoints(day)))
+    .then(dailyGeojson => {
+      const combined = [];
+      for (const geojson of dailyGeojson) combined.push(...(geojson.features || []));
+      cacheBucket[periodKey] = combined;
+      return combined;
+    })
+    .finally(() => {
+      delete promiseBucket[periodKey];
+    });
+
+  return promiseBucket[periodKey];
+}
+
 async function buildAggregate(mode, periodKey) {
   if (aggregateCache[mode][periodKey]) return aggregateCache[mode][periodKey];
   const matching = availableDays.filter(d =>

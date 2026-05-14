@@ -368,6 +368,15 @@ async function searchArticles() {
   const indexes = await Promise.all(dayKeys.map(loadSummaryIndex));
   const merged  = Object.assign({}, ...indexes);
 
+  if (currentMode !== "daily" && !allPointsForDay.length) {
+    beginLoadingNow();
+    try {
+      allPointsForDay = await loadSelectionPoints(currentMode, periodKey);
+    } finally {
+      endLoading();
+    }
+  }
+
   const matches = allPointsForDay
     .map(f => {
       const props = f.properties || {};
@@ -501,6 +510,16 @@ function setupCountrySearch() {
 }
 
 async function showArticlesForCountry(iso3, name) {
+  const periodKey = currentSelectionPeriodKey();
+  if (!periodKey) return;
+  if (currentMode !== "daily" && !allPointsForDay.length) {
+    beginLoadingNow();
+    try {
+      allPointsForDay = await loadSelectionPoints(currentMode, periodKey);
+    } finally {
+      endLoading();
+    }
+  }
   if (!allPointsForDay.length) return;
   const names = countryArticleNames(iso3, name);
   const matches = allPointsForDay.filter(f => {

@@ -11,7 +11,7 @@ on:
         default: ""
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   download:
@@ -45,11 +45,3 @@ jobs:
             python scripts/download_events.py $DATE
           fi
           
-      - name: Commit and push new data
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add docs/points_data/ docs/goldstein_data/ docs/mb_data/ docs/final_data/
-          git diff --cached --quiet && echo "No new data" || \
-            git commit -m "data: add GDELT data for $(date -u -d yesterday +%Y-%m-%d)" && \
-            git push
