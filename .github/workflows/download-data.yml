@@ -28,7 +28,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install boto3 requests pyyaml sumy nltk numpy trafilatura
+          pip install boto3 python-dotenv requests pyyaml sumy nltk numpy trafilatura
           pip install newspaper3k
 
       - name: Download yesterday's GDELT data

@@ -67,6 +67,8 @@ from urllib.parse import urlparse
 import nltk
 nltk.download('punkt')
 nltk.download('punkt_tab')
+from dotenv import load_dotenv
+load_dotenv()
 
 import random
 import time
