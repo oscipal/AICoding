@@ -3,7 +3,7 @@
 An interactive map of global political events powered by the [GDELT Project](https://www.gdeltproject.org/).
 
 **Live site:** 
-[oscipal.github.io/AICoding](https://oscipal.github.io/AICoding/)
+[https://aicoding-acb.pages.dev](https://aicoding-acb.pages.dev)
 ![thumbnail](thumbnail.png)
 
 ## What it does
