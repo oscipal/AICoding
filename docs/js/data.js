@@ -8,24 +8,39 @@ function dataUrl(path) {
 
 async function loadDaily(dayKey) {
   if (!dailyCache[dayKey]) {
-    const r = await fetch(dataUrl(`mb_data/${dayKey}.json`));
-    dailyCache[dayKey] = r.ok ? await r.json() : [];
+    try {
+      const r = await fetch(dataUrl(`mb_data/${dayKey}.json`));
+      dailyCache[dayKey] = r.ok ? await r.json() : [];
+    } catch (err) {
+      console.warn(`Failed to load daily data for ${dayKey}:`, err);
+      dailyCache[dayKey] = [];
+    }
   }
   return dailyCache[dayKey];
 }
 
 async function loadPoints(dayKey) {
   if (!pointsCache[dayKey]) {
-    const r = await fetch(dataUrl(`points_data/${dayKey}.geojson`));
-    pointsCache[dayKey] = r.ok ? await r.json() : { type: "FeatureCollection", features: [] };
+    try {
+      const r = await fetch(dataUrl(`points_data/${dayKey}.geojson`));
+      pointsCache[dayKey] = r.ok ? await r.json() : { type: "FeatureCollection", features: [] };
+    } catch (err) {
+      console.warn(`Failed to load point data for ${dayKey}:`, err);
+      pointsCache[dayKey] = { type: "FeatureCollection", features: [] };
+    }
   }
   return pointsCache[dayKey];
 }
 
 async function loadGoldstein(dayKey) {
   if (!goldsteinCache[dayKey]) {
-    const r = await fetch(dataUrl(`goldstein_data/${dayKey}.json`));
-    goldsteinCache[dayKey] = r.ok ? await r.json() : [];
+    try {
+      const r = await fetch(dataUrl(`goldstein_data/${dayKey}.json`));
+      goldsteinCache[dayKey] = r.ok ? await r.json() : [];
+    } catch (err) {
+      console.warn(`Failed to load Goldstein data for ${dayKey}:`, err);
+      goldsteinCache[dayKey] = [];
+    }
   }
   return goldsteinCache[dayKey];
 }
@@ -81,10 +96,13 @@ async function loadSelectionPoints(mode, periodKey) {
     mode === "weekly" ? getWeekKey(d) === periodKey : getMonthKey(d) === periodKey
   );
 
-  promiseBucket[periodKey] = Promise.all(matching.map(day => loadPoints(day)))
-    .then(dailyGeojson => {
+  promiseBucket[periodKey] = Promise.allSettled(matching.map(day => loadPoints(day)))
+    .then(results => {
       const combined = [];
-      for (const geojson of dailyGeojson) combined.push(...(geojson.features || []));
+      for (const result of results) {
+        if (result.status !== "fulfilled") continue;
+        combined.push(...(result.value.features || []));
+      }
       cacheBucket[periodKey] = combined;
       return combined;
     })
