@@ -501,31 +501,6 @@ map.on("load", async () => {
       }
       return;
     }
-
-    if (viewMode === "activity" && eventsVisible) {
-      const openedEvent = await openNearestEventArticles(e.point);
-      if (openedEvent) return;
-    }
-
-    const countryHits = map.queryRenderedFeatures(e.point, { layers: ["country-fills"] });
-    if (!countryHits.length) return;
-    const props = countryHits[0].properties;
-    const iso3  = props.iso_3166_1_alpha_3;
-    const name  = props.name_en || iso3;
-
-    const geo = countryHits[0].geometry;
-    const b   = countryBoundsMap[iso3] || new mapboxgl.LngLatBounds();
-    (geo.type === "Polygon" ? [geo.coordinates] : geo.coordinates)
-      .forEach(poly => poly[0].forEach(c => b.extend(c)));
-    countryBoundsMap[iso3] = b;
-
-    if (viewMode === "political") {
-      tsCountryBounds = b;
-      showTimeSeries(iso3, name);
-      return;
-    }
-    showArticlesForCountry(iso3, name);
-    map.fitBounds(b, { padding: 40, maxZoom: 5, duration: 1000 });
   });
 
   for (const layer of ["clusters","unclustered-point","events-raw-point"]) {
